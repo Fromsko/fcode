@@ -62,3 +62,12 @@ Copyright (C) 2026 shuishan。整体项目按 **GPL-3.0-only** 发布，见 [LIC
 欢迎提交 Issue 和 Pull Request，见 [CONTRIBUTING.md](CONTRIBUTING.md)。安全问题请按 [SECURITY.md](SECURITY.md) 私下报告。
 
 请勿提交或通过公开问题附带模型凭据、配对信息、真实聊天记录、签名密钥和签名口令。
+
+## 请我喝杯咖啡
+
+觉得 YCode 好用，可以请作者喝杯咖啡。
+
+<p>
+  <img src="assets/donate/wechat.webp" alt="微信" width="200">
+  <img src="assets/donate/alipay.webp" alt="支付宝" width="200">
+</p>

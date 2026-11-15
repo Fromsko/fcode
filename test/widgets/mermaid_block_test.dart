@@ -1,3 +1,4 @@
+import 'package:baocode_mobile/ui/widgets/mobile_widgets.dart';
 import 'package:baocode_mobile/chat/markdown/mermaid_code_block.dart';
 import 'package:baocode_mobile/chat/markdown/code_citation.dart';
 import 'package:flutter/material.dart';
@@ -49,6 +50,7 @@ void main() {
     addTearDown(focus.dispose);
     await tester.pumpWidget(
       MaterialApp(
+        navigatorObservers: [ReleaseInputOnCover()],
         home: Scaffold(
           body: Column(
             children: [

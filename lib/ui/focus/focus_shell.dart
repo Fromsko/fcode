@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../link/phone_link.dart' show DesktopLinkStatus;
@@ -18,6 +17,7 @@ import '../devices/devices_page.dart';
 import '../files/files_tab.dart';
 import '../settings/settings_page.dart';
 import '../tasks/chat_page.dart';
+import '../widgets/back_to_exit.dart';
 import '../widgets/lucide_icon.dart';
 import '../widgets/mobile_widgets.dart';
 import '../widgets/project_icon_view.dart';
@@ -51,6 +51,9 @@ class _FocusShellState extends State<FocusShell> {
   final _search = TextEditingController();
   final _scroll = ScrollController();
   final _scrolled = ValueNotifier(false);
+  final _searchRow = GlobalKey();
+  final _refreshEdge = ValueNotifier(0.0);
+  late final _exit = BackToExit(widget.state);
 
   /// Projects folded in the side panel; all start unfolded.
   final _folded = <(String, String)>{};
@@ -64,6 +67,8 @@ class _FocusShellState extends State<FocusShell> {
     _search.dispose();
     _scroll.dispose();
     _scrolled.dispose();
+    _refreshEdge.dispose();
+    _exit.dispose();
     super.dispose();
   }
 
@@ -98,7 +103,10 @@ class _FocusShellState extends State<FocusShell> {
     _scaffold.currentState?.closeDrawer();
   }
 
-  Future<void> _newConversation(BuildContext context, [ProjectRef? project]) {
+  Future<void> _newConversation(
+    BuildContext context, [
+    ProjectRef? project,
+  ]) async {
     project ??= recentProject(state, state.selectedDesktopId);
     if (project == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -111,23 +119,21 @@ class _FocusShellState extends State<FocusShell> {
           ),
         ),
       );
-      return Future.value();
+      return;
     }
     final target = project;
-    return runUi(context, () async {
-      final id = await requestDraft(state, target);
-      if (!mounted) return;
-      setState(
-        () => _open = _Open(
-          target.desktopId,
-          id,
-          state.tr('新对话', 'New conversation'),
-          projectId: target.project.id,
-          draftIn: target,
-        ),
-      );
-      _scaffold.currentState?.closeDrawer();
-    });
+    final id = await draftWithCover(context, state, target);
+    if (id == null || !mounted) return;
+    setState(
+      () => _open = _Open(
+        target.desktopId,
+        id,
+        state.tr('新对话', 'New conversation'),
+        projectId: target.project.id,
+        draftIn: target,
+      ),
+    );
+    _scaffold.currentState?.closeDrawer();
   }
 
   void _left() {
@@ -136,12 +142,12 @@ class _FocusShellState extends State<FocusShell> {
     setState(() => _open = null);
   }
 
-  /// 返回键先打开侧边栏，侧边栏开着时才退出应用。
+  /// 返回键先打开侧边栏；侧边栏开着时，连按两次才退出应用。
   void _back() {
     final scaffold = _scaffold.currentState;
     if (scaffold == null) return;
     if (scaffold.isDrawerOpen) {
-      unawaited(SystemNavigator.pop());
+      _exit.press(context);
     } else {
       scaffold.openDrawer();
     }
@@ -178,24 +184,24 @@ class _FocusShellState extends State<FocusShell> {
         key: _scaffold,
         resizeToAvoidBottomInset: false,
         drawerEdgeDragWidth: 32,
+        // 侧边栏不是页面，[ReleaseInputOnCover] 管不到：打开时放掉焦点，连同
+        // 记着的输入框一起清掉，关上时就不会还给它、弹出键盘。
+        onDrawerChanged: (opened) {
+          if (opened) FocusManager.instance.primaryFocus?.unfocus();
+        },
         drawer: _SidePanel(
           state: state,
           open: open,
           search: _search,
           scroll: _scroll,
           scrolled: _scrolled,
+          searchRow: _searchRow,
+          refreshEdge: _refreshEdge,
           folded: _folded,
           onSearch: () => setState(() {}),
           onToggle: (key, set) => setState(
             () => set.contains(key) ? set.remove(key) : set.add(key),
           ),
-          onFoldAll: (keys) => setState(() {
-            if (keys.every(_folded.contains)) {
-              _folded.removeAll(keys);
-            } else {
-              _folded.addAll(keys);
-            }
-          }),
           onSelect: _select,
           onNew: _newConversation,
         ),
@@ -249,31 +255,22 @@ class _FocusShellState extends State<FocusShell> {
   }
 }
 
-/// 标题栏左边打开侧边栏的按钮；有等着你的对话或 Bot 新消息时带个小点。
+/// 标题栏左边打开侧边栏的按钮；有等着你的对话、Bot 新消息或群消息时带个小点。
 class _SidePanelButton extends StatelessWidget {
   const _SidePanelButton({required this.state, required this.onPressed});
   final AppState state;
   final VoidCallback onPressed;
 
   @override
-  Widget build(BuildContext context) {
-    final desktopId = state.selectedDesktopId;
-    final waiting =
-        state.awaitingOn(desktopId).waiting +
-        state.bots
-            .where((ref) => ref.desktopId == desktopId)
-            .fold(0, (sum, ref) => sum + ref.bot.unread);
-    return IconButton(
-      key: const ValueKey('open-side-panel'),
-      tooltip: state.tr('打开侧边栏', 'Open side panel'),
-      onPressed: onPressed,
-      icon: Badge(
-        isLabelVisible: waiting > 0,
-        smallSize: 7,
-        child: const LucideIcon('panel-left', size: 22),
-      ),
-    );
-  }
+  Widget build(BuildContext context) => IconButton(
+    key: const ValueKey('open-side-panel'),
+    tooltip: state.tr('打开侧边栏', 'Open side panel'),
+    onPressed: onPressed,
+    icon: AttentionDot(
+      state: state,
+      child: const LucideIcon('panel-left', size: 22),
+    ),
+  );
 }
 
 /// 还没有对话可开：电脑没配对、没连上，或者电脑上还没有对话。
@@ -347,10 +344,11 @@ class _SidePanel extends StatelessWidget {
     required this.search,
     required this.scroll,
     required this.scrolled,
+    required this.searchRow,
+    required this.refreshEdge,
     required this.folded,
     required this.onSearch,
     required this.onToggle,
-    required this.onFoldAll,
     required this.onSelect,
     required this.onNew,
   });
@@ -361,10 +359,13 @@ class _SidePanel extends StatelessWidget {
 
   /// Whether the list runs under the title, for the line beneath it.
   final ValueNotifier<bool> scrolled;
+
+  /// 搜索那一行，和它底边离列表顶的距离：下拉刷新的圈从项目上沿转出来。
+  final GlobalKey searchRow;
+  final ValueNotifier<double> refreshEdge;
   final Set<(String, String)> folded;
   final VoidCallback onSearch;
   final void Function((String, String) key, Set<(String, String)> set) onToggle;
-  final ValueChanged<List<(String, String)>> onFoldAll;
   final ValueChanged<SessionRef> onSelect;
   final Future<void> Function(BuildContext context, [ProjectRef? project])
   onNew;
@@ -382,22 +383,18 @@ class _SidePanel extends StatelessWidget {
         state.sessions,
         state.desktopName,
       );
-      final keys = [
-        for (final item in projects)
-          if (item.sessions.isNotEmpty)
-            (item.ref.desktopId, item.ref.project.id),
-      ];
-      final botUnread = state.bots
-          .where((ref) => ref.desktopId == desktopId)
-          .fold(0, (sum, ref) => sum + ref.bot.unread);
+      final botUnread = state.botUnreadOn(desktopId);
       final width = math.min(MediaQuery.sizeOf(context).width * .86, 340.0);
       return Drawer(
         width: width,
-        backgroundColor: scheme.surfaceContainerLow,
+        backgroundColor: scheme.surface,
         shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.horizontal(right: Radius.circular(20)),
         ),
+        // 和列表模式、设置页一套：灰底上是白色圆角卡片，搜索框也是白的。
         child: SafeArea(
+          top: false,
+          bottom: false,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -406,6 +403,7 @@ class _SidePanel extends StatelessWidget {
                 valueListenable: scrolled,
                 builder: (context, under, child) => DecoratedBox(
                   decoration: BoxDecoration(
+                    color: scheme.surface,
                     border: Border(
                       bottom: BorderSide(
                         color: under
@@ -415,7 +413,7 @@ class _SidePanel extends StatelessWidget {
                       ),
                     ),
                   ),
-                  child: child,
+                  child: SafeArea(bottom: false, child: child!),
                 ),
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(
@@ -456,127 +454,120 @@ class _SidePanel extends StatelessWidget {
                     if (metrics != null) {
                       scrolled.value = metrics.pixels > metrics.minScrollExtent;
                     }
+                    if (note case ScrollStartNotification(
+                      depth: 0,
+                      :final context?,
+                    )) {
+                      _measureRefreshEdge(context);
+                    }
                     return false;
                   },
-                  child: CustomScrollView(
-                    key: const PageStorageKey('side-panel-list'),
-                    controller: scroll,
-                    slivers: [
-                      SliverToBoxAdapter(
-                        child: _inset(
-                          Column(
-                            children: [
-                              _Entry(
-                                key: const ValueKey('side-panel-new'),
-                                icon: 'square-pen',
-                                label: state.tr('新对话', 'New conversation'),
-                                onTap: () => onNew(context),
-                              ),
-                              _Entry(
-                                key: const ValueKey('side-bots'),
-                                icon: 'bot',
-                                label: 'Bot',
-                                count: botUnread,
-                                onTap: () => openPage<void>(
-                                  context,
-                                  AnimatedBuilder(
-                                    animation: state,
-                                    builder: (_, _) => BotsTab(state: state),
-                                  ),
-                                ),
-                              ),
-                              _Entry(
-                                key: const ValueKey('side-files'),
-                                icon: 'folder',
-                                label: state.tr('文件', 'Files'),
-                                onTap: () => openPage<void>(
-                                  context,
-                                  AnimatedBuilder(
-                                    animation: state,
-                                    builder: (_, _) => FilesTab(state: state),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      SliverToBoxAdapter(
-                        child: Divider(
-                          height: MobileSpace.lg,
-                          indent: MobileSpace.lg,
-                          endIndent: MobileSpace.lg,
-                          color: scheme.outlineVariant,
-                        ),
-                      ),
-                      // 搜索框和全部折叠同一行，不再单占一行「项目」标题。
-                      SliverToBoxAdapter(
-                        child: Padding(
-                          padding: const EdgeInsets.only(
-                            left: MobileSpace.xs,
-                            right: MobileSpace.xs,
-                            bottom: MobileSpace.xs,
-                          ),
-                          child: Row(
-                            children: [
-                              Expanded(
-                                child: SearchCapsule(
-                                  state: state,
-                                  controller: search,
-                                  hint: state.tr(
-                                    '搜索项目和对话',
-                                    'Search projects and chats',
-                                  ),
-                                  onChanged: (_) => onSearch(),
-                                ),
-                              ),
-                              if (keys.isNotEmpty)
-                                Padding(
-                                  padding: const EdgeInsets.only(bottom: 4),
-                                  child: IconButton(
-                                    key: const ValueKey('side-fold-all'),
-                                    tooltip: keys.every(folded.contains)
-                                        ? state.tr('全部展开', 'Unfold all')
-                                        : state.tr('全部折叠', 'Fold all'),
-                                    visualDensity: VisualDensity.compact,
-                                    onPressed: () => onFoldAll(keys),
-                                    icon: LucideIcon(
-                                      'chevrons-up-down',
-                                      size: 18,
-                                      color: theme.hintColor,
-                                    ),
-                                  ),
-                                ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      if (projects.isEmpty)
+                  child: ValueListenableBuilder<double>(
+                    valueListenable: refreshEdge,
+                    builder: (context, edge, list) => RefreshIndicator(
+                      key: const ValueKey('side-panel-refresh'),
+                      edgeOffset: edge,
+                      color: scheme.onSurface,
+                      backgroundColor: scheme.surfaceContainerLowest,
+                      onRefresh: () async {
+                        unawaited(state.haptic());
+                        if (desktopId != null) {
+                          await state.refreshDesktop(desktopId);
+                        }
+                      },
+                      child: list!,
+                    ),
+                    child: CustomScrollView(
+                      key: const PageStorageKey('side-panel-list'),
+                      controller: scroll,
+                      // 项目少、不满一屏也要能下拉刷新。
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      slivers: [
+                        // 入口直接在灰底上，图标和搜索框、项目头像左边对齐。
                         SliverToBoxAdapter(
                           child: Padding(
-                            padding: const EdgeInsets.all(MobileSpace.xl),
-                            child: Text(
-                              filters.searching
-                                  ? state.tr(
-                                      '没有匹配的项目或对话',
-                                      'No matching projects or conversations',
-                                    )
-                                  : state.tr(
-                                      '电脑上还没有打开的项目',
-                                      'No projects open on this desktop',
+                            padding: const EdgeInsets.only(top: MobileSpace.xs),
+                            child: Column(
+                              children: [
+                                _Entry(
+                                  key: const ValueKey('side-bots'),
+                                  icon: 'bot',
+                                  label: 'Bot',
+                                  count: botUnread,
+                                  onTap: () => openPage<void>(
+                                    context,
+                                    AnimatedBuilder(
+                                      animation: state,
+                                      builder: (_, _) => BotsTab(state: state),
                                     ),
-                              textAlign: TextAlign.center,
-                              style: TextStyle(color: theme.hintColor),
+                                  ),
+                                ),
+                                _Entry(
+                                  key: const ValueKey('side-files'),
+                                  icon: 'folder',
+                                  label: state.tr('文件', 'Files'),
+                                  onTap: () => openPage<void>(
+                                    context,
+                                    AnimatedBuilder(
+                                      animation: state,
+                                      builder: (_, _) => FilesTab(state: state),
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                         ),
-                      // 每个项目一组：标题吸在顶上，直到下一个项目把它顶走。
-                      for (final item in projects)
-                        _group(context, item, searching: filters.searching),
-                      const SliverToBoxAdapter(
-                        child: SizedBox(height: MobileSpace.md),
-                      ),
-                    ],
+                        SliverToBoxAdapter(
+                          child: Padding(
+                            key: searchRow,
+                            padding: const EdgeInsets.only(
+                              top: MobileSpace.sm,
+                              bottom: MobileSpace.xs,
+                            ),
+                            child: SearchCapsule(
+                              state: state,
+                              controller: search,
+                              hint: state.tr(
+                                '搜索项目和对话',
+                                'Search projects and chats',
+                              ),
+                              onChanged: (_) => onSearch(),
+                            ),
+                          ),
+                        ),
+                        if (projects.isEmpty)
+                          SliverToBoxAdapter(
+                            child: Padding(
+                              padding: const EdgeInsets.all(MobileSpace.xl),
+                              child: Text(
+                                filters.searching
+                                    ? state.tr(
+                                        '没有匹配的项目或对话',
+                                        'No matching projects or conversations',
+                                      )
+                                    : state.tr(
+                                        '电脑上还没有打开的项目',
+                                        'No projects open on this desktop',
+                                      ),
+                                textAlign: TextAlign.center,
+                                style: TextStyle(color: theme.hintColor),
+                              ),
+                            ),
+                          ),
+                        // 每个项目一组：标题吸在顶上，直到下一个项目把它顶走。
+                        for (final (index, item) in projects.indexed)
+                          _group(
+                            context,
+                            item,
+                            searching: filters.searching,
+                            first: index == 0,
+                          ),
+                        const SliverToBoxAdapter(
+                          child: SizedBox(height: MobileSpace.md),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -588,58 +579,78 @@ class _SidePanel extends StatelessWidget {
     },
   );
 
-  static Widget _inset(Widget child) => Padding(
-    padding: const EdgeInsets.symmetric(horizontal: MobileSpace.sm),
-    child: child,
-  );
+  /// 圈从搜索行底下出来：量它的底边离列表顶多远（滚上去了就贴顶）。
+  void _measureRefreshEdge(BuildContext list) {
+    final row = searchRow.currentContext?.findRenderObject();
+    final box = list.findRenderObject();
+    if (row is! RenderBox || box is! RenderBox || !row.attached) return;
+    final bottom = row.localToGlobal(Offset(0, row.size.height)).dy;
+    refreshEdge.value = math.max(0, bottom - box.localToGlobal(Offset.zero).dy);
+  }
 
   Widget _group(
     BuildContext context,
     ConversationProject item, {
     required bool searching,
+    required bool first,
   }) {
     final ref = item.ref;
     final key = (ref.desktopId, ref.project.id);
     // 搜索时都摊开，搜到的对话不藏在折叠里。
     final isFolded = !searching && folded.contains(key);
-    return SliverMainAxisGroup(
+    final card = Theme.of(context).colorScheme.surfaceContainerLowest;
+    // 和列表模式一样撑满一行；项目之间的线和列表行一样，从名字底下起。
+    return DecoratedSliver(
       key: ValueKey('side-group-${ref.desktopId}-${ref.project.id}'),
-      slivers: [
-        PinnedHeaderSliver(
-          child: ColoredBox(
-            color: Theme.of(context).colorScheme.surfaceContainerLow,
-            child: _inset(
-              _ProjectHeader(
-                state: state,
-                project: ref,
-                sessions: item.sessions,
-                folded: isFolded,
-                onToggle: item.sessions.isEmpty
-                    ? null
-                    : () => onToggle(key, folded),
-                onNew: () => onNew(context, ref),
+      decoration: BoxDecoration(color: card),
+      sliver: SliverMainAxisGroup(
+        slivers: [
+          PinnedHeaderSliver(
+            child: Material(
+              color: card,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (!first)
+                    const Divider(height: 1, indent: _ProjectHeader.textStart),
+                  _ProjectHeader(
+                    state: state,
+                    project: ref,
+                    sessions: item.sessions,
+                    folded: isFolded,
+                    onToggle: item.sessions.isEmpty
+                        ? null
+                        : () => onToggle(key, folded),
+                    onNew: () => onNew(context, ref),
+                  ),
+                ],
               ),
             ),
           ),
-        ),
-        SliverList.list(
-          children: [
-            if (!isFolded)
-              for (final session in item.sessions)
-                _inset(
-                  _SessionLine(
-                    state: state,
-                    session: session,
-                    selected:
-                        open?.desktopId == session.desktopId &&
-                        open?.sessionId == session.session.id,
-                    onTap: () => onSelect(session),
-                  ),
-                ),
-            const SizedBox(height: MobileSpace.xs),
-          ],
-        ),
-      ],
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(
+              MobileSpace.xs,
+              0,
+              MobileSpace.xs,
+              MobileSpace.xs,
+            ),
+            sliver: SliverList.list(
+              children: [
+                if (!isFolded)
+                  for (final session in item.sessions)
+                    _SessionLine(
+                      state: state,
+                      session: session,
+                      selected:
+                          open?.desktopId == session.desktopId &&
+                          open?.sessionId == session.session.id,
+                      onTap: () => onSelect(session),
+                    ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -661,6 +672,11 @@ class _ProjectHeader extends StatelessWidget {
   final VoidCallback? onToggle;
   final VoidCallback onNew;
 
+  static const _iconSize = 22.0, _gap = 10.0;
+
+  /// 名字起头离左边多远：项目之间的分割线从这里起。
+  static const textStart = MobileSpace.md + _iconSize + _gap;
+
   @override
   Widget build(BuildContext context) {
     final hint = Theme.of(context).hintColor;
@@ -674,17 +690,17 @@ class _ProjectHeader extends StatelessWidget {
         borderRadius: BorderRadius.circular(MobileSizes.radius),
         onTap: onToggle ?? onNew,
         child: SizedBox(
-          height: 40,
+          height: 46,
           child: Row(
             children: [
-              const SizedBox(width: MobileSpace.sm),
+              const SizedBox(width: MobileSpace.md),
               ProjectIconView(
                 state: state,
                 ref: project,
-                size: 20,
+                size: _iconSize,
                 showBadge: false,
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: _gap),
               // 名字和角标占满中间，右边两个按钮贴着行尾，和对话的时间对齐。
               Expanded(
                 child: Row(
@@ -695,11 +711,23 @@ class _ProjectHeader extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
-                          fontSize: MobileType.secondary,
+                          fontSize: MobileType.body,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
                     ),
+                    if (onToggle != null) ...[
+                      const SizedBox(width: 4),
+                      AnimatedRotation(
+                        turns: folded ? -.25 : 0,
+                        duration: const Duration(milliseconds: 180),
+                        child: LucideIcon(
+                          'chevron-down',
+                          size: 14,
+                          color: hint,
+                        ),
+                      ),
+                    ],
                     if (project.project.pinned == true) ...[
                       const SizedBox(width: 6),
                       LucideIcon('pin', size: 13, color: hint),
@@ -720,24 +748,8 @@ class _ProjectHeader extends StatelessWidget {
                   tooltip: state.tr('在此项目新对话', 'New conversation here'),
                   padding: EdgeInsets.zero,
                   onPressed: onNew,
-                  icon: LucideIcon('plus', size: 18, color: hint),
+                  icon: LucideIcon('plus', size: 16, color: hint),
                 ),
-              ),
-              SizedBox.square(
-                dimension: 32,
-                child: onToggle == null
-                    ? null
-                    : AnimatedRotation(
-                        turns: folded ? -.25 : 0,
-                        duration: const Duration(milliseconds: 180),
-                        child: Center(
-                          child: LucideIcon(
-                            'chevron-down',
-                            size: 16,
-                            color: hint,
-                          ),
-                        ),
-                      ),
               ),
               const SizedBox(width: MobileSpace.xs),
             ],
@@ -779,11 +791,11 @@ class _SessionLine extends StatelessWidget {
           borderRadius: BorderRadius.circular(MobileSizes.radius),
           onTap: onTap,
           child: SizedBox(
-            height: 38,
+            height: 40,
             child: Row(
               children: [
                 SizedBox(
-                  width: 38,
+                  width: 40,
                   child: dot == null ? null : Center(child: _StatusDot(dot)),
                 ),
                 Expanded(
@@ -791,9 +803,9 @@ class _SessionLine extends StatelessWidget {
                     ref.session.title,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
+                    // 不加粗，选中只靠底色。
                     style: TextStyle(
-                      fontSize: MobileType.secondary,
-                      fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+                      fontSize: MobileType.sideItem,
                       color: selected
                           ? scheme.onSecondaryContainer
                           : scheme.onSurface,
@@ -871,11 +883,15 @@ class _Entry extends StatelessWidget {
       height: 44,
       child: Row(
         children: [
-          const SizedBox(width: MobileSpace.sm),
+          const SizedBox(width: MobileSpace.md),
           // bot 的图形矮，放大一点才和别的图标看着一样大；占位不变。
           Transform.scale(
-            scale: icon == 'bot' ? 24 / 22 : 1,
-            child: LucideIcon(icon, size: 22),
+            scale: icon == 'bot' ? 22 / 20 : 1,
+            child: LucideIcon(
+              icon,
+              size: 20,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
           ),
           const SizedBox(width: MobileSpace.md),
           Expanded(
@@ -908,94 +924,93 @@ class _Footer extends StatelessWidget {
     Widget page(Widget Function() build) =>
         AnimatedBuilder(animation: state, builder: (_, _) => build());
     return DecoratedBox(
-      decoration: BoxDecoration(
-        border: Border(
-          top: BorderSide(color: theme.colorScheme.outlineVariant, width: .5),
-        ),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(
-          MobileSpace.sm,
-          MobileSpace.sm,
-          MobileSpace.xs,
-          MobileSpace.xs,
-        ),
-        child: Row(
-          children: [
-            Expanded(
-              child: InkWell(
-                key: const ValueKey('side-desktop'),
-                borderRadius: BorderRadius.circular(MobileSizes.radius),
-                onTap: () async {
-                  final chosen = await showDeviceMenu(
-                    context,
-                    state,
-                    selectedId: desktopId,
-                  );
-                  if (chosen == null || chosen == desktopId) return;
-                  state.selectDesktop(chosen);
-                },
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: MobileSpace.sm,
-                    vertical: 6,
-                  ),
-                  child: Row(
-                    children: [
-                      DeviceIcon(status: status, laptop: desktop?.laptop),
-                      const SizedBox(width: 10),
-                      Flexible(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              desktop?.name ??
-                                  state.tr('选择电脑', 'Choose desktop'),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                fontSize: MobileType.secondary,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            if (desktopId != null && status != null)
+      decoration: BoxDecoration(color: theme.colorScheme.surface),
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(
+            MobileSpace.sm,
+            MobileSpace.sm,
+            MobileSpace.xs,
+            MobileSpace.xs,
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: InkWell(
+                  key: const ValueKey('side-desktop'),
+                  borderRadius: BorderRadius.circular(MobileSizes.radius),
+                  onTap: () async {
+                    final chosen = await showDeviceMenu(
+                      context,
+                      state,
+                      selectedId: desktopId,
+                    );
+                    if (chosen == null || chosen == desktopId) return;
+                    state.selectDesktop(chosen);
+                  },
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: MobileSpace.sm,
+                      vertical: 6,
+                    ),
+                    child: Row(
+                      children: [
+                        DeviceIcon(status: status, laptop: desktop?.laptop),
+                        const SizedBox(width: 10),
+                        Flexible(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
                               Text(
-                                linkStatusLabel(state, status),
+                                desktop?.name ??
+                                    state.tr('选择电脑', 'Choose desktop'),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                                style: MobileTheme.metaStyleOf(
-                                  context,
-                                  color:
-                                      status == DesktopLinkStatus.needsPairing
-                                      ? theme.colorScheme.error
-                                      : null,
+                                style: const TextStyle(
+                                  fontSize: MobileType.secondary,
+                                  fontWeight: FontWeight.w600,
                                 ),
                               ),
-                          ],
+                              if (desktopId != null && status != null)
+                                Text(
+                                  linkStatusLabel(state, status),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: MobileTheme.metaStyleOf(
+                                    context,
+                                    color:
+                                        status == DesktopLinkStatus.needsPairing
+                                        ? theme.colorScheme.error
+                                        : null,
+                                  ),
+                                ),
+                            ],
+                          ),
                         ),
-                      ),
-                      const SizedBox(width: MobileSpace.xs),
-                      LucideIcon(
-                        'chevrons-up-down',
-                        size: 14,
-                        color: theme.hintColor,
-                      ),
-                    ],
+                        const SizedBox(width: MobileSpace.xs),
+                        SwitcherChevron(
+                          state: state,
+                          icon: 'chevrons-up-down',
+                          size: 14,
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
-            ),
-            IconButton(
-              key: const ValueKey('side-settings'),
-              tooltip: state.tr('设置', 'Settings'),
-              onPressed: () => openPage<void>(
-                context,
-                page(() => SettingsPage(state: state)),
+              IconButton(
+                key: const ValueKey('side-settings'),
+                tooltip: state.tr('设置', 'Settings'),
+                onPressed: () => openPage<void>(
+                  context,
+                  page(() => SettingsPage(state: state)),
+                ),
+                icon: const LucideIcon('settings', size: 22),
               ),
-              icon: const LucideIcon('settings', size: 22),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

@@ -1,4 +1,5 @@
 import 'bots.dart';
+import 'groups.dart';
 
 /// What a phone asks a desktop ([LinkPeer.call]).
 abstract final class LinkMethods {
@@ -29,11 +30,13 @@ abstract final class LinkMethods {
   /// 强制刷新最多等待 20 秒；官方桌面未实现时返回 unknown/unsupported。
   static const quota = 'quota';
 
-  /// `{"session", "window"?}`: follows the session, [LinkEvents.session]
-  /// bringing all of it at once, then what changes. With `window` (an
-  /// int N), only the last N items at first, and more as it asks
-  /// ([earlier]); `start` and `count` of every update are then counted
-  /// from the first item the phone has, not the session's first.
+  /// `{"session", "window"?, "have"?}`: follows the session,
+  /// [LinkEvents.session] bringing its snapshot, then what changes.
+  /// With `window`, only the last N items at first; indexes are relative
+  /// to the phone's window. With `have`, the raw item digests from a
+  /// previous connection, an unchanged prefix may be omitted.
+  /// [LinkPeer] supplies the digests and restores the prefix through
+  /// [LinkSessionMirror]; older desktops still return a full snapshot.
   static const open = 'open';
 
   /// `{"session", "count"?}` -> `{"items": [...], "earlier"}`: up to
@@ -47,7 +50,7 @@ abstract final class LinkMethods {
   static const close = 'close';
 
   /// `{"session"?, "project"?, "bot"?, "text", "images"?, "mentions"?,
-  /// "now"?, "id"?}`: a message to the bot's conversation ([LinkBot.id]),
+  /// "now"?, "id"?, "suggest"?}`: a message to the bot's conversation ([LinkBot.id]),
   /// started if it has none; else to the session; with neither, to a new
   /// one in the project. With `id` (the phone's for it), one sent again
   /// (its answer lost) is answered as before, not taken twice.
@@ -184,8 +187,8 @@ abstract final class LinkMethods {
   static const download = 'download';
 
   /// `{"bot"?, "name", "avatar"?, "avatarImage"?, "identity", "abilities",
-  /// "proactive", "chatOnly"?}` (as [LinkBot]'s JSON; `chatOnly` not said,
-  /// as it was): the bot changed, or a new one (no
+  /// "proactive", "chatOnly"?, "writesFirst"?}` (as [LinkBot]'s JSON;
+  /// optional mode/contact flags not said stay as they were): changed or new (no
   /// `bot`): `{"bot": LinkBot}`. `avatarImage`, `{"data" (base64), "type"}`
   /// (at most [LinkLimits.avatar]), is a new picture for it; else `avatar`
   /// is an emoji, or the picture it has, kept.
@@ -224,9 +227,37 @@ abstract final class LinkMethods {
   /// none). Sent when it changes, and on connecting.
   static const setMe = 'setMe';
 
-  /// Those whose answers can be large: each goes on a stream of its own
-  /// (see [LinkPeer]), holding up nothing else.
-  static const bulk = {read, image, icon, files, folder, botAvatar, extensions};
+  /// `{"group"?, "name", "members", "passes"?, "rules"?, "gap"?}`:
+  /// create or update a group; answered with `{"group": LinkGroup}`.
+  static const saveGroup = 'saveGroup';
+
+  /// `{"group"}`: deletes the group and all its messages.
+  static const deleteGroup = 'deleteGroup';
+
+  /// `{"group", "count"?}` -> `{"messages", "more"}`: recent messages,
+  /// marked read, followed by [LinkEvents.group] until [closeGroup].
+  static const openGroup = 'openGroup';
+
+  /// `{"group", "before", "count"?}`: a page before the given sequence.
+  static const earlierGroup = 'earlierGroup';
+
+  /// `{"group"}`: no longer followed.
+  static const closeGroup = 'closeGroup';
+
+  /// `{"group", "text", "images"?, "id"?, "ref"?}` -> `{"seq"}`.
+  /// A repeated `id` is taken once; `ref` is a quoted message sequence.
+  static const sendGroup = 'sendGroup';
+
+  /// `{"group", "image"}` -> `{"type", "data"}`: a group's picture.
+  static const groupImage = 'groupImage';
+
+  /// `{"project"? or "bot"?, "name", "data"}`: raw file bytes as base64,
+  /// at most [LinkLimits.upload], put on the target host outside its project.
+  /// Returns `{"path"}` (the host's absolute path) or `{"tooLarge": true}`.
+  static const upload = 'upload';
+
+  /// Large answers use individual streams, holding up no control events.
+  static const bulk = {read, image, icon, files, folder, botAvatar, extensions, groupImage};
 }
 
 /// How much of what a phone asks for it gets, at most.
@@ -249,6 +280,9 @@ abstract final class LinkLimits {
   /// A file's bytes, opened in another app: base64, under the relay's
   /// burst (16 MiB).
   static const download = 8 * 1024 * 1024;
+
+  /// A file's raw bytes, uploaded from the phone.
+  static const upload = 8 * 1024 * 1024;
 }
 
 /// A task an agent left running beside the conversation: a command, a
@@ -362,6 +396,8 @@ class LinkExtension {
 
 /// What a desktop tells a phone, unasked ([LinkPeer.emit]).
 abstract final class LinkEvents {
+  /// Messages of a followed group: {group, messages}.
+  static const group = 'group';
   /// A [LinkState], whenever it changes.
   static const state = 'state';
 
@@ -641,6 +677,7 @@ class LinkState {
     this.projects = const [],
     this.sessions = const [],
     this.bots = const [],
+    this.groups = const [],
   });
 
   factory LinkState.fromJson(Map<String, Object?> json) => LinkState(
@@ -657,6 +694,10 @@ class LinkState {
       for (final bot in (json['bots'] as List?) ?? const [])
         LinkBot.fromJson(_map(bot)),
     ],
+    groups: [
+      for (final group in (json['groups'] as List?) ?? const [])
+        LinkGroup.fromJson(_map(group)),
+    ],
   );
 
   final DeviceInfo device;
@@ -666,12 +707,14 @@ class LinkState {
   /// The bots, the assistant first; their conversations are not among
   /// [sessions].
   final List<LinkBot> bots;
+  final List<LinkGroup> groups;
 
   Map<String, Object?> toJson() => {
     'device': device.toJson(),
     'projects': [for (final project in projects) project.toJson()],
     'sessions': [for (final session in sessions) session.toJson()],
     if (bots.isNotEmpty) 'bots': [for (final bot in bots) bot.toJson()],
+    if (groups.isNotEmpty) 'groups': [for (final group in groups) group.toJson()],
   };
 }
 

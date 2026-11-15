@@ -32,6 +32,9 @@ object BackgroundHost {
     private val pendingResults = mutableListOf<MethodChannel.Result>()
     private val startTimeout = Runnable { fail(gate.token, "start_timeout") }
 
+    /** 通知点开后要去的对话：界面没起来时先记着，attach 后交给 Dart。 */
+    private var pendingOpen: Pair<String, String>? = null
+
     /** 前台服务已确认进入前台（仅主线程读写）。 */
     val running get() = gate.phase == KeepAliveGate.Phase.RUNNING
 
@@ -60,6 +63,28 @@ object BackgroundHost {
             }.also { it.start() }
         }
         bridge?.attach(host)
+        deliverPendingOpen()
+    }
+
+    /** 通知带着目标点进来（冷启动或 onNewIntent）：界面就绪后交给 Dart。 */
+    fun openFromNotification(intent: Intent?) {
+        val desktopId = intent?.getStringExtra(KeepAliveService.EXTRA_DESKTOP_ID)
+        val sessionId = intent?.getStringExtra(KeepAliveService.EXTRA_SESSION_ID)
+        if (desktopId.isNullOrEmpty() || sessionId.isNullOrEmpty()) return
+        intent.removeExtra(KeepAliveService.EXTRA_DESKTOP_ID)
+        intent.removeExtra(KeepAliveService.EXTRA_SESSION_ID)
+        pendingOpen = desktopId to sessionId
+        deliverPendingOpen()
+    }
+
+    private fun deliverPendingOpen() {
+        val target = pendingOpen ?: return
+        // 引擎不在、界面不在，或界面刚建好还没进 onStart：都等下一次 attach/可见。
+        val channel = channel ?: return
+        if (activity == null || !visible) return
+        pendingOpen = null
+        channel.invokeMethod("openConversation", mapOf(
+            "desktopId" to target.first, "sessionId" to target.second))
     }
 
     fun handleActivityResult(requestCode: Int, resultCode: Int, data: Intent?) =
@@ -69,7 +94,9 @@ object BackgroundHost {
         bridge?.onRequestPermissionsResult(requestCode) == true
 
     fun setVisible(host: MainActivity, value: Boolean) {
-        if (activity === host) visible = value
+        if (activity !== host) return
+        visible = value
+        if (value) deliverPendingOpen()
     }
 
     /** [destroyEngine] 为 true 时，随后 Flutter 会销毁引擎，这里先清掉依附于它的东西。 */
@@ -95,10 +122,13 @@ object BackgroundHost {
     /** Service 启动被系统拒绝。 */
     fun serviceFailed(token: Long) = fail(token, "start_failed")
 
-    /** 前台服务结束（用户停止、系统停止、超时、销毁）。幂等；旧令牌的迟到回调被忽略。 */
-    fun serviceEnded(token: Long) = fail(token, "start_cancelled")
+    /**
+     * 前台服务结束（用户停止、系统停止、超时、销毁）。幂等；旧令牌的迟到回调被忽略。
+     * [userStopped] 区分用户按的停止与系统结束：只有前者该改用户的设置。
+     */
+    fun serviceEnded(token: Long, userStopped: Boolean = false) = fail(token, "start_cancelled", userStopped)
 
-    private fun fail(token: Long?, code: String) {
+    private fun fail(token: Long?, code: String, userStopped: Boolean = false) {
         val previous = gate.end(token) ?: return
         main.removeCallbacks(startTimeout)
         val waiting = pendingResults.toList()
@@ -107,7 +137,10 @@ object BackgroundHost {
         if (activity != null) {
             // 引擎仍归当前 Activity 所有，正常前台使用；只是不再保留。
             FlutterEngineCache.getInstance().remove(ENGINE_ID)
-            if (previous == KeepAliveGate.Phase.RUNNING) channel?.invokeMethod("statusChanged", status())
+            if (previous == KeepAliveGate.Phase.RUNNING) {
+                channel?.invokeMethod("statusChanged",
+                    status() + mapOf("userStopped" to userStopped))
+            }
         } else {
             // Activity 已脱离，没人持有引擎：销毁缓存引擎与 bridge，进程可被回收。
             val orphan = engine
@@ -131,15 +164,46 @@ object BackgroundHost {
         when (call.method) {
             "start" -> start(call, result)
             "stop" -> {
+                // 这里是用户自己关的（设置页或通知按钮）；同样记下，Dart 下次启动读到。
                 val context = appContext
-                fail(null, "start_cancelled")
+                if (context != null) KeepAliveService.recordUserStopped(context)
+                fail(null, "start_cancelled", userStopped = true)
                 context?.let { it.stopService(Intent(it, KeepAliveService::class.java)) }
                 result.success(status())
             }
             "status" -> result.success(status())
+            "update" -> update(call, result)
+            // 通知上按过停止、Dart 当时没醒着：读走这个标记，别再按设置拉起。
+            "takeUserStopped" -> {
+                val context = appContext
+                result.success(context != null && KeepAliveService.takeUserStopped(context))
+            }
             else -> result.notImplemented()
         }
     }
+
+    /** 摘要变了：重发同一条服务通知；服务没在跑就当无事发生。 */
+    private fun update(call: MethodCall, result: MethodChannel.Result) {
+        val context = appContext
+        val title = call.argument<String>("title")
+        val body = call.argument<String>("body")
+        if (context == null || title.isNullOrBlank() || body.isNullOrBlank()) {
+            result.error("bad_arguments", "title and body are required", null)
+            return
+        }
+        val posted = KeepAliveService.postNotice(context, KeepAliveNotice(
+            title = title,
+            body = body,
+            stopLabel = startedStopLabel ?: "Stop",
+            shortText = call.argument<String>("shortText"),
+            desktopId = call.argument<String>("desktopId"),
+            sessionId = call.argument<String>("sessionId"),
+        ))
+        result.success(posted)
+    }
+
+    /** 启动时的停止按钮文字；摘要更新只改标题和正文，不带它。 */
+    private var startedStopLabel: String? = null
 
     private fun start(call: MethodCall, result: MethodChannel.Result) {
         if (running) {
@@ -163,10 +227,8 @@ object BackgroundHost {
             result.error("bad_arguments", "title, body and stopLabel are required", null)
             return
         }
-        if (bridge?.notificationAllowed() != true) {
-            result.error("notification_permission_denied", "Notifications were not allowed", null)
-            return
-        }
+        // 通知权限没给也能跑，只是通知不显示：冷启动按默认开启不打扰用户，
+        // 设置页那边自己先申请权限再调用这里。
         // 监听不可用就明确失败，不在没有切网信号的情况下悄悄保活。
         network?.start()
         if (network?.watching != true) {
@@ -179,10 +241,14 @@ object BackgroundHost {
             return
         }
         val context: Context = host.applicationContext
+        startedStopLabel = stopLabel
         val intent = Intent(context, KeepAliveService::class.java)
             .putExtra(KeepAliveService.EXTRA_TITLE, title)
             .putExtra(KeepAliveService.EXTRA_BODY, body)
             .putExtra(KeepAliveService.EXTRA_STOP_LABEL, stopLabel)
+            .putExtra(KeepAliveService.EXTRA_SHORT_TEXT, call.argument<String>("shortText"))
+            .putExtra(KeepAliveService.EXTRA_DESKTOP_ID, call.argument<String>("desktopId"))
+            .putExtra(KeepAliveService.EXTRA_SESSION_ID, call.argument<String>("sessionId"))
             .putExtra(KeepAliveService.EXTRA_TOKEN, token)
         pendingResults.add(result)
         FlutterEngineCache.getInstance().put(ENGINE_ID, current)

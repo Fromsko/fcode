@@ -56,7 +56,6 @@ void main() {
           );
           expect(tester.getSize(surface).height, lessThan(50));
           expect(find.byTooltip('添加附件'), findsOneWidget);
-          expect(find.byTooltip('表情'), findsOneWidget);
           expect(find.byTooltip('发送'), findsOneWidget);
         }
         expect(find.byTooltip('移除图片'), findsNWidgets(2));

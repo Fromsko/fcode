@@ -142,7 +142,7 @@ Widget _host(
 );
 
 void main() {
-  testWidgets('已连接但仍在同步时延迟显示文字，旧内容保留且完成后收起', (tester) async {
+  testWidgets('已有内容时同步更久才提示，旧内容保留且完成后收起', (tester) async {
     final state = _State();
     addTearDown(state.dispose);
     state.history
@@ -150,6 +150,9 @@ void main() {
       ..loading = true;
     await tester.pumpWidget(_host(state));
     await tester.pump(const Duration(milliseconds: 100));
+    expect(find.text('同步中…'), findsNothing);
+    // 回前台的静默核对：一秒半内不提示，不闪。
+    await tester.pump(const Duration(milliseconds: 1200));
     expect(find.text('同步中…'), findsNothing);
     await tester.pump(const Duration(milliseconds: 300));
     expect(find.text('同步中…'), findsOneWidget);
@@ -160,6 +163,22 @@ void main() {
     await tester.pump();
     expect(find.text('同步中…'), findsNothing);
     expect(find.text('缓存中的旧消息'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  testWidgets('第一次打开还没有内容时 300ms 就提示同步中', (tester) async {
+    final state = _State();
+    addTearDown(state.dispose);
+    state.history.loading = true;
+    await tester.pumpWidget(_host(state));
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(find.text('同步中…'), findsNothing);
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.text('同步中…'), findsOneWidget);
+    state.history.loading = false;
+    state.update();
+    await tester.pump();
+    expect(find.text('同步中…'), findsNothing);
     await tester.pumpWidget(const SizedBox.shrink());
   });
 
@@ -183,7 +202,8 @@ void main() {
       ..linkOverride = null;
     state.update();
     await tester.pump();
-    await tester.pump(const Duration(milliseconds: 350));
+    // 已有内容：重连后的核对要 1.5 秒以上才提示。
+    await tester.pump(const Duration(milliseconds: 1550));
     expect(find.text('连接中…'), findsNothing);
     expect(find.text('同步中…'), findsOneWidget);
     expect(find.byType(ConnectingSpinner), findsOneWidget);
@@ -260,7 +280,8 @@ void main() {
     expect(find.byType(MaterialBanner), findsNothing);
     await tester.tap(find.text('重试'));
     await tester.pump();
-    await tester.pump(const Duration(milliseconds: 350));
+    // 已有内容：要在 1.5 秒后还说同步中才提示。
+    await tester.pump(const Duration(milliseconds: 1550));
     expect(state.refreshes, 1);
     expect(find.text('同步中…'), findsOneWidget);
     expect(find.text('缓存中的旧消息'), findsOneWidget);
@@ -295,7 +316,7 @@ void main() {
     state.history.loading = true;
     state.update();
     await tester.pump();
-    await tester.pump(const Duration(milliseconds: 350));
+    await tester.pump(const Duration(milliseconds: 1550));
     await tester.pump();
     expect(find.text('同步中…'), findsOneWidget);
     expect(tester.getTopLeft(row).dy, closeTo(before, 1));

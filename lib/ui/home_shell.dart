@@ -7,6 +7,7 @@ import 'conversations/chats_tab.dart';
 import 'files/files_tab.dart';
 import 'focus/focus_shell.dart';
 import 'settings/settings_page.dart';
+import 'widgets/back_to_exit.dart';
 import 'widgets/lucide_icon.dart';
 import '../theme/app_theme.dart';
 
@@ -24,6 +25,7 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
   static const _settingsTab = 3;
 
   final _pages = PageController();
+  late final _exit = BackToExit(widget.state);
   int _tab = 0;
   late final _updates =
       widget.updateChecker ?? AutoUpdateChecker(currentVersion: appVersion);
@@ -33,6 +35,7 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
     super.initState();
     if (widget.state.demo) return;
     WidgetsBinding.instance.addObserver(this);
+    widget.state.addListener(_collapseForNotification);
     WidgetsBinding.instance.addPostFrameCallback((_) => _checkForUpdates());
   }
 
@@ -40,6 +43,16 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState lifecycle) {
     if (lifecycle == AppLifecycleState.resumed) _checkForUpdates();
+  }
+
+  /// 点后台通知：先收起上面开着的页面，应用层随后直接推那段对话。
+  void _collapseForNotification() {
+    if (!mounted || widget.state.peekPendingOpen() == null) return;
+    Navigator.of(context).popUntil((route) => route.isFirst);
+    if (!widget.state.settings.focusLayout && _tab != 0) {
+      setState(() => _tab = 0);
+      _pages.jumpToPage(0);
+    }
   }
 
   /// 有可下载的新版本才弹窗；没有或失败都不打扰。更新窗口已经开着时
@@ -63,7 +76,9 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    widget.state.removeListener(_collapseForNotification);
     _pages.dispose();
+    _exit.dispose();
     super.dispose();
   }
 
@@ -79,136 +94,154 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
     ];
     // 只算当前这台电脑的，列表里也只有它的对话——别的电脑的在切换电脑那里标。
     final desktopId = state.selectedDesktopId;
-    final unread =
-        state.awaitingOn(desktopId).waiting +
-        state.bots
-            .where((ref) => ref.desktopId == desktopId)
-            .fold(0, (sum, ref) => sum + ref.bot.unread);
-    return Scaffold(
-      body: Column(
-        children: [
-          if (state.demo)
-            SafeArea(
-              bottom: false,
-              child: ColoredBox(
-                color: Theme.of(context).colorScheme.primaryContainer,
-                child: SizedBox(
-                  width: double.infinity,
-                  child: Padding(
-                    padding: const EdgeInsets.all(5),
-                    child: Text(
-                      state.tr(
-                        '演示模式 · 不会执行命令',
-                        'Demo mode · no commands are executed',
-                      ),
-                      textAlign: TextAlign.center,
-                      style: MobileTheme.metaStyleOf(
-                        context,
-                        color: Theme.of(context).colorScheme.onPrimaryContainer,
+    // Bot 与群聊都在 Bot 页，未读一起算在 Bot 标签上。
+    final botUnread = state.botUnreadOn(desktopId);
+    int unreadOf(int index) => switch (index) {
+      0 => state.awaitingOn(desktopId).waiting,
+      1 => botUnread,
+      _ => 0,
+    };
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        if (_tab == 0) return _exit.press(context);
+        setState(() => _tab = 0);
+        _pages.jumpToPage(0);
+      },
+      child: Scaffold(
+        body: Column(
+          children: [
+            if (state.demo)
+              SafeArea(
+                bottom: false,
+                child: ColoredBox(
+                  color: Theme.of(context).colorScheme.primaryContainer,
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: Padding(
+                      padding: const EdgeInsets.all(5),
+                      child: Text(
+                        state.tr(
+                          '演示模式 · 不会执行命令',
+                          'Demo mode · no commands are executed',
+                        ),
+                        textAlign: TextAlign.center,
+                        style: MobileTheme.metaStyleOf(
+                          context,
+                          color: Theme.of(context)
+                              .colorScheme
+                              .onPrimaryContainer,
+                        ),
                       ),
                     ),
                   ),
                 ),
               ),
-            ),
-          if (state.startupError != null)
-            SafeArea(
-              bottom: false,
-              child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: Text(
-                  state.startupError!,
-                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+            if (state.startupError != null)
+              SafeArea(
+                bottom: false,
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Text(
+                    state.startupError!,
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                  ),
                 ),
               ),
+            Expanded(
+              child: IndexedStack(
+                index: _tab == _settingsTab ? 1 : 0,
+                children: [
+                  PageView(
+                    controller: _pages,
+                    allowImplicitScrolling: true,
+                    onPageChanged: (index) => setState(() => _tab = index),
+                    children: [
+                      _KeptPage(child: ChatsTab(state: state)),
+                      _KeptPage(child: BotsTab(state: state)),
+                      _KeptPage(child: FilesTab(state: state)),
+                    ],
+                  ),
+                  SettingsPage(state: state),
+                ],
+              ),
             ),
-          Expanded(
-            child: IndexedStack(
-              index: _tab == _settingsTab ? 1 : 0,
-              children: [
-                PageView(
-                  controller: _pages,
-                  allowImplicitScrolling: true,
-                  onPageChanged: (index) => setState(() => _tab = index),
-                  children: [
-                    _KeptPage(child: ChatsTab(state: state)),
-                    _KeptPage(child: BotsTab(state: state)),
-                    _KeptPage(child: FilesTab(state: state)),
-                  ],
-                ),
-                SettingsPage(state: state),
-              ],
-            ),
-          ),
-        ],
-      ),
-      bottomNavigationBar: DecoratedBox(
-        decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surfaceBright,
-          border: Border(
-            top: BorderSide(color: Theme.of(context).dividerColor, width: .5),
-          ),
+          ],
         ),
-        child: SafeArea(
-          top: false,
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(minHeight: 60),
-            child: Row(
-              children: [
-                for (var index = 0; index < entries.length; index++)
-                  Expanded(
-                    child: Semantics(
-                      selected: index == _tab,
-                      button: true,
-                      label: entries[index].$2,
-                      child: InkResponse(
-                        onTap: () => _select(index),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 8),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Badge(
-                                key: ValueKey('tab-badge-$index'),
-                                isLabelVisible: index == 0 && unread > 0,
-                                label: Text('$unread'),
-                                // bot 的图形矮，放大一点才和别的图标看着一样大；占位不变。
-                                child: Transform.scale(
-                                  scale: entries[index].$1 == 'bot'
-                                      ? 26 / 24
-                                      : 1,
-                                  child: LucideIcon(
-                                    entries[index].$1,
-                                    size: 24,
-                                    color: index == _tab
-                                        ? Theme.of(context).colorScheme.primary
-                                        : Theme.of(context).hintColor,
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(height: MobileSpace.xs),
-                              Text(
-                                entries[index].$2,
-                                style: MobileTheme.metaStyleOf(context)
-                                    .copyWith(
-                                      fontWeight: index == _tab
-                                          ? FontWeight.w600
-                                          : FontWeight.normal,
+        bottomNavigationBar: DecoratedBox(
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surfaceBright,
+            border: Border(
+              top: BorderSide(color: Theme.of(context).dividerColor, width: .5),
+            ),
+          ),
+          child: SafeArea(
+            top: false,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(minHeight: 60),
+              child: Row(
+                children: [
+                  for (var index = 0; index < entries.length; index++)
+                    Expanded(
+                      child: Semantics(
+                        selected: index == _tab,
+                        button: true,
+                        label: entries[index].$2,
+                        child: InkResponse(
+                          onTap: () => _select(index),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 8),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Badge(
+                                  key: ValueKey('tab-badge-$index'),
+                                  isLabelVisible:
+                                      index < 2 && unreadOf(index) > 0,
+                                  label: Text('${unreadOf(index)}'),
+                                  // bot 的图形矮，放大一点才和别的图标看着一样大；占位不变。
+                                  child: Transform.scale(
+                                    scale: entries[index].$1 == 'bot'
+                                        ? 26 / 24
+                                        : 1,
+                                    child: LucideIcon(
+                                      entries[index].$1,
+                                      size: 24,
                                       color: index == _tab
                                           ? Theme.of(context)
                                                 .colorScheme
                                                 .primary
                                           : Theme.of(context).hintColor,
                                     ),
-                              ),
-                            ],
+                                  ),
+                                ),
+                                const SizedBox(height: MobileSpace.xs),
+                                Text(
+                                  entries[index].$2,
+                                  style: MobileTheme.metaStyleOf(context)
+                                      .copyWith(
+                                        fontWeight: index == _tab
+                                            ? FontWeight.w600
+                                            : FontWeight.normal,
+                                        color: index == _tab
+                                            ? Theme.of(context)
+                                                  .colorScheme
+                                                  .primary
+                                            : Theme.of(context).hintColor,
+                                      ),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
                       ),
                     ),
-                  ),
-              ],
+                ],
+              ),
             ),
           ),
         ),

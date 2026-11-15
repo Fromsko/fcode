@@ -19,6 +19,9 @@ abstract final class MobileType {
   /// 正文：对话、列表标题、设置项、输入框、按钮。
   static const body = 16.0;
 
+  /// 侧栏里项目下的对话：比项目名小一号，层级靠字号分开。
+  static const sideItem = 15.0;
+
   /// 次要：副标题、说明、对话里的步骤行。
   static const secondary = 14.0;
 

@@ -10,8 +10,13 @@ class BackgroundConnection extends ChangeNotifier {
   static const channel = MethodChannel('local.baocode.mobile/background');
   final DateTime Function() _now;
   bool running = false;
+
   Object? error;
-  VoidCallback? onNetworkChanged, onStopped;
+  VoidCallback? onNetworkChanged;
+
+  /// [userStopped] 为 true 是用户在通知上按了停止，false 是系统结束的。
+  void Function(bool userStopped)? onStopped;
+  void Function(String desktopId, String sessionId)? onOpenTarget;
   DateTime? _started, _lastTick;
   Timer? _pulse;
   bool _continuous = false, _valid = false, _disposed = false;
@@ -35,11 +40,23 @@ class BackgroundConnection extends ChangeNotifier {
     if (call.method == 'networkChanged') {
       invalidate();
       onNetworkChanged?.call();
+    } else if (call.method == 'openConversation') {
+      final data = call.arguments;
+      if (data is Map &&
+          data['desktopId'] is String &&
+          data['sessionId'] is String) {
+        onOpenTarget?.call(
+          data['desktopId'] as String,
+          data['sessionId'] as String,
+        );
+      }
     } else if (call.method == 'statusChanged') {
       final data = call.arguments;
       final wasRunning = running;
       _status(data is Map ? data : null);
-      if (wasRunning && !running) onStopped?.call();
+      if (wasRunning && !running) {
+        onStopped?.call(data is Map && data['userStopped'] == true);
+      }
     }
   }
 
@@ -47,12 +64,18 @@ class BackgroundConnection extends ChangeNotifier {
     required String title,
     required String body,
     required String stopLabel,
+    String? shortText,
+    String? desktopId,
+    String? sessionId,
   }) async {
     try {
       final result = await channel.invokeMapMethod<String, Object?>('start', {
         'title': title,
         'body': body,
         'stopLabel': stopLabel,
+        'shortText': ?shortText,
+        'desktopId': ?desktopId,
+        'sessionId': ?sessionId,
       });
       if (result?['running'] != true) {
         throw PlatformException(code: 'background_not_started');
@@ -62,6 +85,30 @@ class BackgroundConnection extends ChangeNotifier {
     } on Object catch (failure) {
       reportError(failure);
       rethrow;
+    }
+  }
+
+  /// 摘要变了才改通知；服务没在跑就什么也不做。失败不打扰用户。
+  Future<void> update(Map<String, Object?> summary) async {
+    if (_disposed || !running) return;
+    try {
+      await channel.invokeMethod<void>('update', summary);
+    } on MissingPluginException {
+      /* 无宿主的测试环境没有该插件。 */
+    } on PlatformException {
+      /* 摘要更新失败不影响连接。 */
+    }
+  }
+
+  /// 用户在通知上按过「停止」而当时 Dart 没醒着：启动时读一次并清掉，
+  /// 免得又被设置里的「开着」拉起来。
+  Future<bool> takeUserStopped() async {
+    try {
+      return await channel.invokeMethod<bool>('takeUserStopped') == true;
+    } on MissingPluginException {
+      return false;
+    } on PlatformException {
+      return false;
     }
   }
 

@@ -265,6 +265,7 @@ class AgentItem extends ChatItem {
     this.children = const [],
     this.result,
     this.background = false,
+    this.ranBefore,
   });
 
   final String description;
@@ -288,6 +289,9 @@ class AgentItem extends ChatItem {
 
   /// How long it took, once done.
   final Duration? duration;
+
+  /// 之前各次运行的累计时长；本次运行时长仍在 duration/startedAt。
+  final Duration? ranBefore;
   final String? model;
   final List<ChatItem> children;
 
@@ -327,6 +331,7 @@ class AgentItem extends ChatItem {
     children: children ?? this.children,
     result: result ?? this.result,
     background: background ?? this.background,
+    ranBefore: ranBefore,
   );
 }
 

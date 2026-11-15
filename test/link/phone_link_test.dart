@@ -27,6 +27,9 @@ class _Desktop {
   bool trusted = false;
   bool failWrites = false;
   bool hangNextState = false;
+
+  /// The next state answer fails as a request (a busy desktop, not a dead link).
+  bool failNextState = false;
   Completer<void>? approval;
   int connections = 0;
   String address = '127.0.0.1:47200';
@@ -72,6 +75,10 @@ class _Desktop {
           'device': {'name': 'Actual desktop'},
         };
       case LinkMethods.state:
+        if (failNextState) {
+          failNextState = false;
+          throw const LinkRemoteException('failed', 'State unavailable');
+        }
         if (hangNextState) {
           hangNextState = false;
           await Completer<void>().future;
@@ -302,6 +309,36 @@ void main() {
     await _settle();
     expect(desktop.connections, before + 1);
     expect(phone.statusOf(attempt.desktopId), DesktopLinkStatus.online);
+  });
+
+  test('重连后首个快照失败不拆连接：连接保持在线，之后在这条连接上再取', () async {
+    final desktop = _Desktop();
+    final phone = PhoneLink(
+      store: MemoryLinkStore(),
+      nodeFactory: desktop.nodeFactory,
+    );
+    addTearDown(() async {
+      phone.dispose();
+      await desktop.close();
+    });
+    final attempt = await phone.pair(desktop.offer.uri);
+    await phone.confirmPairing(attempt);
+    await _settle();
+    final id = attempt.desktopId;
+    final before = desktop.connections;
+    desktop.failNextState = true;
+    await phone.reconnect(id);
+    await _settle();
+    expect(
+      phone.statusOf(id),
+      DesktopLinkStatus.online,
+      reason: '认证好的连接不因一次快照失败就关掉重拨',
+    );
+    expect(desktop.connections, before + 1, reason: '只重拨这一次');
+    // 稍后在这条连接上取到了。
+    await Future<void>.delayed(const Duration(milliseconds: 2500));
+    expect(phone.states[id]?['projects'], isEmpty);
+    expect(desktop.connections, before + 1);
   });
 
   test('回到前台时连接正常：不重连，也不闪“连接中”', () async {

@@ -7,6 +7,7 @@ import 'package:baocode_mobile/chat/widgets/pixel_loader.dart';
 import 'package:baocode_mobile/link/link_store.dart';
 import 'package:baocode_mobile/state/app_state.dart';
 import 'package:baocode_mobile/ui/tasks/bot_working_line.dart';
+import 'package:baocode_mobile/ui/tasks/chat_composer_action.dart';
 import 'package:baocode_mobile/ui/tasks/chat_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -167,7 +168,7 @@ void main() {
     await tester.pumpAndSettle();
   });
 
-  testWidgets('Bot 加号面板只有相册和拍摄', (tester) async {
+  testWidgets('Bot 加号面板有相册拍摄和上传，不混入项目文件浏览', (tester) async {
     final state = _State();
     addTearDown(state.dispose);
     await tester.pumpWidget(
@@ -186,7 +187,8 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('chat-action-album')), findsOneWidget);
     expect(find.byKey(const ValueKey('chat-action-camera')), findsOneWidget);
-    // 模型、模式、权限在输入框那排；Bot 不在项目里，没有文件可 @。
+    expect(find.byKey(const ValueKey('chat-action-upload')), findsOneWidget);
+    // 模型、模式、权限在输入框那排；Bot 可上传文件，但不浏览项目文件。
     for (final id in ['file', 'model', 'mode', 'permission', 'stickers']) {
       expect(find.byKey(ValueKey('chat-action-$id')), findsNothing);
     }
@@ -383,19 +385,16 @@ void main() {
     // 空心：里面的方块只有边框，没有填充色。
     expect(find.byKey(const ValueKey('hollow-stop')), findsOneWidget);
     expect(find.byIcon(Icons.stop_circle_outlined), findsNothing);
-    expect(
-      tester.getTopLeft(find.byTooltip('表情')).dx,
-      greaterThanOrEqualTo(input.right),
-    );
+    // 加号在输入框里面靠左，停止在右边。
     expect(
       tester.getTopLeft(find.byTooltip('添加附件')).dx,
-      greaterThanOrEqualTo(input.right),
+      lessThan(tester.getTopLeft(find.byType(TextField)).dx),
     );
-    // 停止和发送一样排在最右边。
     expect(
-      tester.getTopLeft(find.byTooltip('停止生成')).dx,
-      greaterThanOrEqualTo(tester.getTopRight(find.byTooltip('添加附件')).dx),
+      tester.getTopRight(find.byTooltip('停止生成')).dx,
+      closeTo(input.right, 8),
     );
+    expect(find.byTooltip('表情'), findsNothing);
 
     buffer.live = false;
     buffer.items.removeLast();
@@ -409,7 +408,7 @@ void main() {
     await tester.pump();
   });
 
-  testWidgets('表情面板内嵌在输入框下，插入和退格按完整字符，可和加号面板互切', (tester) async {
+  testWidgets('Bot 聊天的输入栏没有表情，加号在左，发送在右，点加号出相册拍摄上传', (tester) async {
     final state = _State();
     addTearDown(state.dispose);
     await tester.pumpWidget(
@@ -424,45 +423,43 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('表情'));
-    await tester.pumpAndSettle();
-    final panel = find.byKey(const ValueKey('chat-emoji'));
-    expect(panel, findsOneWidget);
-    expect(find.byTooltip('键盘'), findsOneWidget);
-    expect(find.byType(BottomSheet), findsNothing);
+    final plus = find.byTooltip('添加附件');
+    final field = find.byType(TextField);
+    final send = find.byTooltip('发送');
+    final surface = find.byKey(const ValueKey('composer-input-surface'));
+    expect(find.byTooltip('表情'), findsNothing);
+    expect(find.byTooltip('键盘'), findsNothing);
+    expect(tester.getRect(plus).left, lessThan(tester.getRect(field).left));
+    expect(tester.getRect(send).left, greaterThan(tester.getRect(field).right));
+    // 有内容才亮。
     expect(
-      tester.getTopLeft(panel).dy,
-      greaterThan(
-        tester
-            .getBottomLeft(find.byKey(const ValueKey('composer-input-surface')))
-            .dy,
-      ),
+      tester.widget<ChatComposerAction>(find.byType(ChatComposerAction)).enabled,
+      isFalse,
+    );
+    await tester.enterText(field, '你好');
+    await tester.pump();
+    expect(
+      tester.widget<ChatComposerAction>(find.byType(ChatComposerAction)).enabled,
+      isTrue,
     );
 
-    await tester.tap(find.byKey(const ValueKey('emoji-0')));
-    await tester.tap(find.byKey(const ValueKey('emoji-1')));
-    await tester.pump();
-    final field = tester.widget<TextField>(find.byType(TextField));
-    expect(field.controller!.text, '😀😁');
-    await tester.tap(find.byTooltip('删除'));
-    await tester.pump();
-    expect(field.controller!.text, '😀');
-    await tester.tap(find.byTooltip('删除'));
-    await tester.pump();
-    expect(field.controller!.text, '');
-
-    await tester.tap(find.byTooltip('添加附件'));
+    await tester.tap(plus);
     await tester.pumpAndSettle();
-    expect(panel, findsNothing);
-    expect(find.byKey(const ValueKey('chat-actions')), findsOneWidget);
-    await tester.tap(find.byTooltip('表情'));
-    await tester.pumpAndSettle();
+    final panel = find.byKey(const ValueKey('chat-actions'));
     expect(panel, findsOneWidget);
+    expect(
+      tester.getTopLeft(panel).dy,
+      greaterThanOrEqualTo(tester.getBottomLeft(surface).dy),
+    );
+    expect(find.byKey(const ValueKey('chat-action-album')), findsOneWidget);
+    expect(find.byKey(const ValueKey('chat-action-camera')), findsOneWidget);
+    expect(find.byKey(const ValueKey('chat-action-upload')), findsOneWidget);
+    expect(find.byKey(const ValueKey('chat-action-file')), findsNothing);
 
-    await tester.tap(find.byTooltip('键盘'));
+    // 点输入框收起面板，回到键盘。
+    await tester.tap(field);
     await tester.pumpAndSettle();
     expect(panel, findsNothing);
-    expect(find.byTooltip('表情'), findsOneWidget);
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pumpAndSettle();
   });

@@ -192,7 +192,9 @@ void main() {
 
     scroll.jumpTo(0);
     await tester.pump();
-    expect(counter(tester), '– / 3');
+    // 还没到第一处也显示 1，不能往上，往下就是第一处。
+    expect(counter(tester), '1 / 3');
+    expect(button(tester, 'diff-previous-change').onPressed, isNull);
     await tester.tap(find.byKey(const ValueKey('diff-next-change')));
     await tester.pump();
     expect(scroll.offset, first);

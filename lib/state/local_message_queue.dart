@@ -31,6 +31,7 @@ class LocalQueuedMessage {
     required this.text,
     this.images = const [],
     this.mentions = const [],
+    this.draft,
     this.project,
     this.bot,
   });
@@ -38,6 +39,7 @@ class LocalQueuedMessage {
   final String id, text;
   final List<DraftImage> images;
   final List<String> mentions;
+  final InputDraft? draft;
   final String? project, bot;
 }
 
@@ -96,6 +98,7 @@ class LocalMessageQueue {
     required String text,
     List<DraftImage> images = const [],
     List<String> mentions = const [],
+    InputDraft? draft,
     String? project,
     String? bot,
   }) {
@@ -104,6 +107,7 @@ class LocalMessageQueue {
       text: text,
       images: List.unmodifiable(images),
       mentions: List.unmodifiable(mentions),
+      draft: draft,
       project: project,
       bot: bot,
     );

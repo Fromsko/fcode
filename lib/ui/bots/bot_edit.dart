@@ -23,6 +23,7 @@ class _BotEditPageState extends State<BotEditPage> {
   String? _avatarImage;
   String _avatarType = 'image/jpeg';
   bool _saving = false, _chatOnly = false, _needsCreationCheck = false;
+  bool _writesFirst = true;
   String? _saveError;
   BotProfileSaver? _profileSaver;
 
@@ -40,6 +41,7 @@ class _BotEditPageState extends State<BotEditPage> {
     'abilities': (_abilities.map((ability) => ability.name).toList()..sort()),
     'proactive': _proactive.toJson(),
     'chatOnly': _chatOnly,
+    'writesFirst': _writesFirst,
     'desktop': _desktop,
   });
 
@@ -56,6 +58,7 @@ class _BotEditPageState extends State<BotEditPage> {
     _abilities = {...?bot?.abilities};
     _proactive = bot?.proactive ?? const BotProactive();
     _chatOnly = bot?.chatOnly ?? false;
+    _writesFirst = bot?.writesFirst ?? true;
     _desktop = widget.ref?.desktopId ?? widget.state.selectedDesktopId;
     _opened = _snapshot();
     if (_desktop != null) {
@@ -86,6 +89,7 @@ class _BotEditPageState extends State<BotEditPage> {
       _avatarImage = base64Encode(picked.bytes);
       _avatarType = picked.type;
     });
+    await _saveNow();
   }
 
   Future<void> _chooseAvatar(BuildContext anchor) async {
@@ -133,12 +137,14 @@ class _BotEditPageState extends State<BotEditPage> {
             _avatar = emoji;
             _avatarImage = null;
           });
+          await _saveNow();
         }
       case 'none':
         setState(() {
           _avatar = '';
           _avatarImage = null;
         });
+        await _saveNow();
     }
   }
 
@@ -234,18 +240,22 @@ class _BotEditPageState extends State<BotEditPage> {
           return;
         }
       }
-      await saver.save({
-        'name': _name.text.trim(),
-        'identity': _identity.text.trim(),
-        'style': _style.text.trim(),
-        'signature': _signature.text.trim(),
-        'gender': _gender.text.trim(),
-        'avatar': _avatar.trim().isEmpty ? null : _avatar.trim(),
-        if (_avatarImage != null)
-          'avatarImage': {'data': _avatarImage, 'type': _avatarType},
-        'abilities': _abilities.map((ability) => ability.name).toList(),
-        'proactive': _proactive.toJson(),
-      }, chatOnly: _chatOnly);
+      await saver.save(
+        {
+          'name': _name.text.trim(),
+          'identity': _identity.text.trim(),
+          'style': _style.text.trim(),
+          'signature': _signature.text.trim(),
+          'gender': _gender.text.trim(),
+          'avatar': _avatar.trim().isEmpty ? null : _avatar.trim(),
+          if (_avatarImage != null)
+            'avatarImage': {'data': _avatarImage, 'type': _avatarType},
+          'abilities': _abilities.map((ability) => ability.name).toList(),
+          'proactive': _proactive.toJson(),
+        },
+        chatOnly: _chatOnly,
+        writesFirst: _writesFirst,
+      );
       if (mounted) Navigator.pop(context);
     } on Object catch (error) {
       if (mounted) {
@@ -261,6 +271,65 @@ class _BotEditPageState extends State<BotEditPage> {
                   'Creation was not confirmed. Check before creating another bot.',
                 )
               : botSaveFailureMessage(error, widget.state.tr),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  /// An existing bot saves each change at once: no Done button, no page
+  /// being popped, and no creation checks. Creation errors are shown on the
+  /// page, next to everything the other failures show.
+  Future<void> _saveNow() async {
+    if (_creating || _saving) return;
+    final saver = _profileSaver;
+    if (saver == null) return;
+    if (_desktop == null || !widget.state.isOnline(_desktop!)) {
+      setState(
+        () => _saveError = widget.state.tr(
+          '电脑不在线，未保存。',
+          'Desktop offline. Nothing was saved.',
+        ),
+      );
+      return;
+    }
+    setState(() {
+      _saving = true;
+      _saveError = null;
+    });
+    try {
+      await saver.save(
+        {
+          'name': _name.text.trim(),
+          'identity': _identity.text.trim(),
+          'style': _style.text.trim(),
+          'signature': _signature.text.trim(),
+          'gender': _gender.text.trim(),
+          'avatar': _avatar.trim().isEmpty ? null : _avatar.trim(),
+          if (_avatarImage != null)
+            'avatarImage': {'data': _avatarImage, 'type': _avatarType},
+          'abilities': _abilities.map((ability) => ability.name).toList(),
+          'proactive': _proactive.toJson(),
+        },
+        chatOnly: _chatOnly,
+        writesFirst: _writesFirst,
+      );
+    } on BotModeUnconfirmed {
+      if (mounted) {
+        setState(
+          () => _saveError = widget.state.tr(
+            '电脑未确认所选模式。Bot 已保存，请核对实际模式；再次保存只更新这个 Bot。',
+            'The mode was not confirmed. The bot was saved; check its actual mode. Saving again updates that bot.',
+          ),
+        );
+      }
+    } on Object catch (error) {
+      // BotWritesFirstUnconfirmed is a UserFacingError, so its own readable
+      // words come through botSaveFailureMessage too.
+      if (mounted) {
+        setState(
+          () => _saveError = botSaveFailureMessage(error, widget.state.tr),
         );
       }
     } finally {
@@ -326,6 +395,7 @@ class _BotEditPageState extends State<BotEditPage> {
         _avatar = chosen.avatar ?? '';
         _abilities = {...chosen.abilities};
         _chatOnly = chosen.chatOnly;
+        _writesFirst = chosen.writesFirst;
         _proactive = chosen.proactive;
       }
       setState(() {
@@ -353,11 +423,15 @@ class _BotEditPageState extends State<BotEditPage> {
         _signature,
         _gender,
       ]),
-      builder: (context, page) => DiscardGuard(
-        state: state,
-        dirty: !_saving && _snapshot() != _opened,
-        child: page!,
-      ),
+      // An existing bot saves each change at once, so there is nothing to
+      // discard on the way back; a new one must still confirm.
+      builder: (context, page) => _creating
+          ? DiscardGuard(
+              state: state,
+              dirty: !_saving && _snapshot() != _opened,
+              child: page!,
+            )
+          : page!,
       child: Scaffold(
         appBar: AppBar(
           title: Text(
@@ -365,16 +439,18 @@ class _BotEditPageState extends State<BotEditPage> {
                 ? state.tr('新 Bot', 'New bot')
                 : state.tr('编辑资料', 'Edit profile'),
           ),
-          actions: [
-            _doneButton(
-              state,
-              _saving ||
-                      _needsCreationCheck ||
-                      (_profileSaver?.creationUnconfirmed ?? false)
-                  ? null
-                  : _save,
-            ),
-          ],
+          actions: _creating
+              ? [
+                  doneButton(
+                    state,
+                    _saving ||
+                            _needsCreationCheck ||
+                            (_profileSaver?.creationUnconfirmed ?? false)
+                        ? null
+                        : _save,
+                  ),
+                ]
+              : const [],
         ),
         body: ListView(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
@@ -418,6 +494,7 @@ class _BotEditPageState extends State<BotEditPage> {
                             );
                             if (value != null && mounted) {
                               setState(() => _gender.text = value);
+                              await _saveNow();
                             }
                           },
                   ),
@@ -438,6 +515,19 @@ class _BotEditPageState extends State<BotEditPage> {
                   ),
               ],
             ),
+            if (_creating)
+              GroupCard(
+                children: [
+                  SwitchListTile(
+                    key: const ValueKey('bot-writes-first'),
+                    title: Text(state.tr('主动给我发消息', 'Contact me first')),
+                    value: _writesFirst,
+                    onChanged: _saving
+                        ? null
+                        : (value) => setState(() => _writesFirst = value),
+                  ),
+                ],
+              ),
             if (_saveError != null)
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
@@ -500,7 +590,7 @@ class _BotEditPageState extends State<BotEditPage> {
                   ),
                 ],
               ),
-              _Note(_modeNote(state)),
+              _Note(_modeNote(state, _chatOnly)),
               SectionLabel(state.tr('能力', 'Abilities')),
               GroupCard(
                 children: [
@@ -543,7 +633,10 @@ class _BotEditPageState extends State<BotEditPage> {
         controller: controller,
         title: title,
         enabled: !_saving,
-        onChanged: (_) => setState(() {}),
+        onChanged: (_) {
+          setState(() {});
+          _saveNow();
+        },
       );
 }
 

@@ -186,7 +186,42 @@ void main() {
     await tester.scrollUntilVisible(find.text('管智能体'), 160);
     expect(find.text('使用浏览器'), findsOneWidget);
     expect(find.text('删除 Bot'), findsNothing);
+    expect(find.text('聊天设置'), findsNothing);
+    expect(find.text('可以主动找我'), findsOneWidget);
+    await tester.scrollUntilVisible(find.text('推荐回复'), 160);
+    expect(
+      find.text('每次回复后在输入框上方给出几句备选：点击直接发送，长按先编辑。'),
+      findsOneWidget,
+    );
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('主动找我和推荐回复的开关都能切换', (tester) async {
+    final state = _Recording();
+    addTearDown(state.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: MobileTheme.build(Brightness.light),
+        home: BotProfilePage(state: state, ref: _bot),
+      ),
+    );
+    final writesFirst = find.byKey(const ValueKey('bot-writes-first'));
+    await tester.scrollUntilVisible(writesFirst, 160);
+    expect(tester.widget<SwitchListTile>(writesFirst).value, isTrue);
+    await tester.ensureVisible(writesFirst);
+    await tester.pumpAndSettle();
+    await tester.tap(writesFirst);
+    await tester.pumpAndSettle();
+    expect(state.calls.last.$2['writesFirst'], isFalse);
+    final suggestions = find.byKey(const ValueKey('bot-suggestions-setting'));
+    await tester.scrollUntilVisible(suggestions, 160);
+    expect(tester.widget<SwitchListTile>(suggestions).value, isFalse);
+    await tester.ensureVisible(suggestions);
+    await tester.pumpAndSettle();
+    await tester.tap(suggestions);
+    await tester.pumpAndSettle();
+    expect(state.botSuggestionsEnabled('desktop', 'helper'), isTrue);
+    expect(tester.widget<SwitchListTile>(suggestions).value, isTrue);
   });
 
   testWidgets('资料页直接切换能力，整份资料一起保存，不丢名字和图片头像', (tester) async {
@@ -200,6 +235,8 @@ void main() {
     );
     final toggle = find.byKey(const ValueKey('bot-ability-browser'));
     await tester.scrollUntilVisible(toggle, 160);
+    await tester.ensureVisible(toggle);
+    await tester.pumpAndSettle();
     await tester.tap(toggle);
     await tester.pumpAndSettle();
     final (method, params) = state.calls.single;

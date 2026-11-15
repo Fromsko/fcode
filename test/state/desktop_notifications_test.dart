@@ -16,8 +16,8 @@ void main() {
   const running = LinkSessionStatus.running;
   const idle = LinkSessionStatus.idle;
   const needsInput = LinkSessionStatus.needsInput;
-  bool? notice(SessionSummary? before, SessionSummary after) =>
-      DesktopNotifications.turnNotice(before, after);
+  bool? notice(SessionSummary? before, SessionSummary after, {bool seen = false}) =>
+      DesktopNotifications.turnNotice(before, after, seen: seen);
 
   test('第一次见到的对话不提醒', () {
     expect(notice(null, _s(needsInput)), isNull);
@@ -34,6 +34,15 @@ void main() {
   test('没看到运行中，但新变成未读，也算做完', () {
     expect(notice(_s(idle), _s(idle, unread: true)), isFalse);
     expect(notice(_s(needsInput), _s(idle, unread: true)), isFalse);
+  });
+
+  test('手机已经看过的未读，再连上不补发做完提醒；等用户处理的照旧', () {
+    expect(notice(_s(idle), _s(idle, unread: true), seen: true), isNull);
+    expect(notice(_s(needsInput), _s(idle, unread: true), seen: true), isNull);
+    // 卡在等用户处理是另一种事：看过也仍要知道它现在卡住了。
+    expect(notice(_s(running), _s(needsInput), seen: true), isTrue);
+    // 看到过运行中、这轮刚做完：照常提醒。
+    expect(notice(_s(running), _s(idle), seen: false), isFalse);
   });
 
   test('没有新变化不重复提醒', () {

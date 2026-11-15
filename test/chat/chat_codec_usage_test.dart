@@ -2,9 +2,35 @@ import 'dart:typed_data';
 
 import 'package:baocode_mobile/chat/chat_models.dart';
 import 'package:baocode_mobile/link/chat_codec.dart';
+import 'package:baocode_mobile/chat/widgets/agent_step.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('子代理累计运行毫秒时长往返并在复制更新和卡片中保留', () {
+    final item = ChatCodec.decode({
+      't': 'agent',
+      'description': '合成工作流',
+      'status': 'succeeded',
+      'duration': 7000,
+      'ranBefore': 13000,
+    }) as AgentItem;
+    expect(item.ranBefore, const Duration(seconds: 13));
+    expect(item.copyWith(description: '更新描述').ranBefore, item.ranBefore);
+    expect(ChatCodec.encode(item)['ranBefore'], 13000);
+    expect(AgentStep.elapsed(item), const Duration(seconds: 20));
+    final running = AgentItem(
+      description: '合成工作流',
+      startedAt: DateTime(2026),
+      ranBefore: const Duration(seconds: 13),
+    );
+    expect(
+      AgentStep.elapsed(
+        running,
+        now: DateTime(2026).add(const Duration(seconds: 2)),
+      ),
+      const Duration(seconds: 15),
+    );
+  });
   test('整理历史消息不提前解码折叠或屏幕外的图片', () {
     final item = ChatCodec.decode({
       't': 'user',

@@ -29,6 +29,8 @@ class SessionSubscriptions {
   final _references = <SessionKey, int>{};
   final _operations = <SessionKey, _ReadOperation>{};
   final _baselines = <SessionKey>{};
+  final _retries = <SessionKey, Timer>{};
+  final _retryCounts = <SessionKey, int>{};
   bool _disposed = false;
 
   SessionBuffer buffer(String desktop, String session) => _buffers.putIfAbsent((
@@ -65,6 +67,7 @@ class SessionSubscriptions {
       return;
     }
     _references.remove(key);
+    _cancelRetry(key);
     _invalidate(key);
     if (online && !_disposed) {
       try {
@@ -103,9 +106,11 @@ class SessionSubscriptions {
           target.apply(update);
         }
         _baselines.add(key);
+        _cancelRetry(key);
       } on Object {
         if (!_current(key, operation)) return;
         target.error = tr('内容没有更新，请重试', 'Could not refresh. Try again.');
+        _retryLater(key, operation);
         rethrow;
       } finally {
         if (_current(key, operation)) {
@@ -125,11 +130,7 @@ class SessionSubscriptions {
   }) async {
     await Future.wait([
       for (final key in _references.keys.toList())
-        if (isOnline(key.$1) &&
-            !(keepCurrent?.call(key.$1, key.$2) == true &&
-                _baselines.contains(key) &&
-                !_operations.containsKey(key) &&
-                _buffers[key]?.error == null))
+        if (_needsRefresh(key, isOnline, keepCurrent))
           () async {
             try {
               await refresh(key.$1, key.$2);
@@ -138,6 +139,20 @@ class SessionSubscriptions {
             }
           }(),
     ]);
+  }
+
+  /// Same connection, complete baseline, no error: keep it.
+  bool _needsRefresh(
+    SessionKey key,
+    bool Function(String) isOnline,
+    bool Function(String, String)? keepCurrent,
+  ) {
+    if (!isOnline(key.$1)) return false;
+    final keep = keepCurrent?.call(key.$1, key.$2) == true;
+    return !(keep &&
+        _baselines.contains(key) &&
+        !_operations.containsKey(key) &&
+        _buffers[key]?.error == null);
   }
 
   Future<void> earlier(String desktop, String session) async {
@@ -205,9 +220,38 @@ class SessionSubscriptions {
     onChanged();
   }
 
+  /// 同一条连接上失败就隔一会儿再取，最多三次；错误提示一直留着。
+  void _retryLater(SessionKey key, _ReadOperation operation) {
+    if (_disposed ||
+        !_references.containsKey(key) ||
+        !identical(_operations[key], operation)) {
+      return;
+    }
+    final tries = _retryCounts[key] ?? 0;
+    if (tries >= 3) return;
+    _retryCounts[key] = tries + 1;
+    _retries[key]?.cancel();
+    _retries[key] = Timer(Duration(seconds: 2 << tries), () {
+      _retries.remove(key);
+      // 期间已经刷新成功或已关闭：不再多取一次。
+      if (_disposed ||
+          !_references.containsKey(key) ||
+          _buffers[key]?.error == null) {
+        return;
+      }
+      unawaited(refresh(key.$1, key.$2).catchError((Object _) {}));
+    });
+  }
+
+  void _cancelRetry(SessionKey key) {
+    _retries.remove(key)?.cancel();
+    _retryCounts.remove(key);
+  }
+
   void connectionChanged(String desktop, {required bool online}) {
     for (final key
         in _references.keys.where((key) => key.$1 == desktop).toList()) {
+      _cancelRetry(key);
       _invalidate(key);
       if (online) unawaited(refresh(key.$1, key.$2).catchError((Object _) {}));
     }
@@ -216,6 +260,7 @@ class SessionSubscriptions {
   void forget(String desktop) {
     for (final key
         in _buffers.keys.where((key) => key.$1 == desktop).toList()) {
+      _cancelRetry(key);
       _invalidate(key);
       _references.remove(key);
       _buffers.remove(key);
@@ -249,6 +294,11 @@ class SessionSubscriptions {
 
   void dispose() {
     _disposed = true;
+    for (final timer in _retries.values) {
+      timer.cancel();
+    }
+    _retries.clear();
+    _retryCounts.clear();
     _operations.clear();
     _baselines.clear();
     _references.clear();

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:bao_link/bao_link.dart';
 import 'package:baocode_mobile/link/phone_link.dart';
@@ -10,10 +11,16 @@ import 'package:flutter_test/flutter_test.dart';
 class _Link extends PhoneLink {
   _Link() : super(store: MemoryLinkStore());
   int checks = 0, generation = 0;
+
+  /// 探测期间连接断了一次又接上：真实恢复里代次就是这样变的。
+  bool reconnectDuringCheck = false;
   @override
   Future<void> initialize() async {}
   @override
   int connectionGenerationOf(String desktopId) => generation;
+  final online = <String>{'desk'};
+  @override
+  Set<String> get onlineIds => online;
   @override
   List<KeptDesktop> get desktops => const [
     KeptDesktop(id: 'desk', name: '合成电脑', publicKey: ''),
@@ -23,21 +30,31 @@ class _Link extends PhoneLink {
   @override
   Future<void> verifyConnections({
     Duration timeout = const Duration(seconds: 4),
-    Duration quietFor = const Duration(milliseconds: 800),
+    Duration quietFor = const Duration(seconds: 2),
   }) async {
     checks++;
+    if (reconnectDuringCheck) {
+      reconnectDuringCheck = false;
+      // 断线再连上：离线一瞬再上线，订阅层据此重开。
+      online.remove('desk');
+      notifyListeners();
+      online.add('desk');
+      generation++;
+      notifyListeners();
+    }
   }
 }
 
 class _State extends AppState {
-  _State(_Link link, {super.background})
-    : super(store: MemoryLinkStore(), link: link);
+  _State(_Link link, {super.background, MemoryLinkStore? store})
+    : super(store: store ?? MemoryLinkStore(), link: link);
   final opens = <String>[];
   Completer<void>? pending;
   bool fail = false;
   String text = '旧内容';
+  bool online = true;
   @override
-  bool isOnline(String desktopId) => true;
+  bool isOnline(String desktopId) => online;
   @override
   Future<Object?> request(
     String desktopId,
@@ -45,7 +62,16 @@ class _State extends AppState {
     Map<String, Object?> params = const {},
   ]) async {
     if (method == LinkMethods.close) return null;
-    if (method != LinkMethods.open) throw StateError('这里只允许同步读取：$method');
+    if (method != LinkMethods.open) {
+      if (method == LinkMethods.state) {
+        return {
+          'device': {'name': '合成电脑'},
+          'projects': <Object?>[],
+          'bots': <Object?>[],
+        };
+      }
+      throw StateError('这里只允许同步读取：$method');
+    }
     opens.add(params['session']! as String);
     await pending?.future;
     if (fail) throw StateError('会话同步失败');
@@ -75,13 +101,16 @@ void main() {
     messenger.setMockMethodCallHandler(discovery, null);
   });
 
-  test('冷启动以原生实际状态为准，不擅自重开已停止的后台服务', () async {
+  test('冷启动时设置开着而服务没跑：在前台把它启动起来', () async {
     final nativeCalls = <String>[];
+    var running = false;
     messenger.setMockMethodCallHandler(BackgroundConnection.channel, (
       call,
     ) async {
       nativeCalls.add(call.method);
-      return {'running': false, 'networkWatching': true};
+      if (call.method == 'start') running = true;
+      if (call.method == 'takeUserStopped') return false;
+      return {'running': running, 'networkWatching': true};
     });
     addTearDown(
       () => messenger.setMockMethodCallHandler(
@@ -93,8 +122,38 @@ void main() {
     addTearDown(state.dispose);
     await state.initialize();
     expect(state.startupError, isNull);
-    expect(nativeCalls, ['status']);
+    expect(nativeCalls, ['status', 'takeUserStopped', 'start']);
+    expect(state.settings.keepBackgroundConnection, isTrue);
+    expect(state.background.running, isTrue);
+  });
+
+  test('用户在通知上按过停止：冷启动不再按设置拉起', () async {
+    final nativeCalls = <String>[];
+    messenger.setMockMethodCallHandler(BackgroundConnection.channel, (
+      call,
+    ) async {
+      nativeCalls.add(call.method);
+      if (call.method == 'takeUserStopped') return true;
+      return {'running': false, 'networkWatching': true};
+    });
+    addTearDown(
+      () => messenger.setMockMethodCallHandler(
+        BackgroundConnection.channel,
+        null,
+      ),
+    );
+    final store = MemoryLinkStore();
+    final state = _State(_Link(), store: store)
+      ..settings.keepBackgroundConnection = true;
+    addTearDown(state.dispose);
+    await state.initialize();
+    expect(nativeCalls, ['status', 'takeUserStopped']);
     expect(state.settings.keepBackgroundConnection, isFalse);
+    expect(
+      jsonDecode((await store.read('settings'))!)['keepBackgroundConnection'],
+      isFalse,
+      reason: '停止要存下来，下次冷启动不再自己打开',
+    );
   });
 
   test('短暂切应用且同一连接基线完整时，合并探测但不重复拉快照', () async {
@@ -115,7 +174,7 @@ void main() {
     expect(state.buffer('desk', 'active').loading, isFalse);
   });
 
-  test('后台间隔不确定或连接代次变化时仍拉快照，不能只信在线状态', () async {
+  test('连接代次变化时仍拉快照，不能只信在线状态', () async {
     var now = DateTime(2026);
     final link = _Link();
     final state = _State(
@@ -128,11 +187,28 @@ void main() {
     state.setForeground(false);
     now = now.add(const Duration(minutes: 2));
     state.setForeground(true);
+    // 后台间隔不确定不影响判断：探测通过、代次未变，就信这条连接。
+    await state.resume();
+    expect(state.opens, isEmpty);
+    state.setForeground(false);
+    link.reconnectDuringCheck = true;
+    state.setForeground(true);
     await state.resume();
     expect(state.opens, ['active']);
+  });
+
+  test('同一连接恢复后不再重开会话，探测期间重连过才重开', () async {
+    final link = _Link();
+    final state = _State(link);
+    addTearDown(state.dispose);
+    await state.openSession('desk', 'active');
     state.opens.clear();
     state.setForeground(false);
-    link.generation++;
+    state.setForeground(true);
+    await state.resume();
+    expect(state.opens, isEmpty);
+    state.setForeground(false);
+    link.reconnectDuringCheck = true;
     state.setForeground(true);
     await state.resume();
     expect(state.opens, ['active']);
@@ -163,7 +239,7 @@ void main() {
     expect(state.buffer('desk', 'active').error, isNull);
   });
 
-  test('没有连续性依据时仍同步活跃会话，重复唤醒合并且不拉无订阅缓存', () async {
+  test('同一连接下重复唤醒不再开订阅，也不拉无订阅缓存', () async {
     final link = _Link();
     final state = _State(link);
     addTearDown(state.dispose);
@@ -171,7 +247,31 @@ void main() {
     state.buffer('desk', 'closed').items.add({'t': 'text', 'text': '旧缓存'});
     state.opens.clear();
     state.text = '最新内容';
+    final first = state.resume();
+    final second = state.resume();
+    await Future.wait([first, second]);
+    expect(state.opens, isEmpty);
+    expect(link.checks, 1);
+    expect(state.buffer('desk', 'active').loading, isFalse);
+    expect(state.buffer('desk', 'active').items.single, {
+      't': 'text',
+      'text': '旧内容',
+    });
+    expect(state.buffer('desk', 'closed').items.single, {
+      't': 'text',
+      'text': '旧缓存',
+    });
+  });
+
+  test('连接换了之后回前台同步一次，重复唤醒合并且不重开', () async {
+    final link = _Link();
+    final state = _State(link);
+    addTearDown(state.dispose);
+    await state.openSession('desk', 'active');
+    state.opens.clear();
+    state.text = '最新内容';
     state.pending = Completer<void>();
+    link.reconnectDuringCheck = true;
     final first = state.resume();
     final second = state.resume();
     await Future<void>.delayed(Duration.zero);
@@ -189,18 +289,16 @@ void main() {
       'text': '最新内容',
     });
     expect(state.buffer('desk', 'active').loading, isFalse);
-    expect(state.buffer('desk', 'closed').items.single, {
-      't': 'text',
-      'text': '旧缓存',
-    });
   });
 
   test('回前台同步失败保留旧内容与错误，不自动重放请求', () async {
-    final state = _State(_Link());
+    final link = _Link();
+    final state = _State(link);
     addTearDown(state.dispose);
     await state.openSession('desk', 'active');
     state.opens.clear();
     state.fail = true;
+    link.reconnectDuringCheck = true;
     await state.resume();
     final buffer = state.buffer('desk', 'active');
     expect(state.opens, ['active']);

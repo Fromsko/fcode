@@ -16,6 +16,15 @@ class MainActivity : FlutterActivity() {
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         BackgroundHost.attach(this, flutterEngine)
+        // 冷启动时点的是后台通知：intent 在 onCreate 之前就有，引擎接好后处理。
+        BackgroundHost.openFromNotification(intent)
+    }
+
+    // 点后台通知进来：冷启动用 onCreate 的 intent，已在运行时走 onNewIntent。
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        BackgroundHost.openFromNotification(intent)
     }
 
     override fun onStart() {

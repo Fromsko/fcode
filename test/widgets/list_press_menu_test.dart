@@ -8,6 +8,7 @@ import 'package:baocode_mobile/theme/app_theme.dart';
 import 'package:baocode_mobile/ui/bots/bots_tab.dart';
 import 'package:baocode_mobile/ui/conversations/chats_tab.dart';
 import 'package:baocode_mobile/ui/files/files_tab.dart';
+import 'package:baocode_mobile/ui/widgets/lucide_icon.dart';
 import 'package:baocode_mobile/ui/widgets/mobile_widgets.dart' show ListRow;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -24,6 +25,7 @@ class _State extends AppState {
   bool deleted = false;
   bool fail = false;
   List<LinkBot> botList = const [];
+  List<LinkGroup> groupList = const [];
   Completer<void>? pending;
   final calls = <(String, String, Map<String, Object?>)>[];
 
@@ -37,6 +39,15 @@ class _State extends AppState {
   bool isOnline(String desktopId) => online;
   @override
   List<BotRef> get bots => [for (final bot in botList) BotRef('desk', bot)];
+  @override
+  List<GroupRef> get groups => [
+    for (final group in groupList) GroupRef('desk', group),
+  ];
+  @override
+  Future<LinkState> refreshDesktopState(String desktop) async =>
+      const LinkState(
+        device: DeviceInfo(name: '测试电脑', kind: 'windows', system: '合成系统'),
+      );
   @override
   List<ProjectRef> get projects => [
     if (!hidden)
@@ -308,30 +319,10 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('首页小宝长按置顶排到项目前面，只存手机不发请求', (tester) async {
-    final state = _State()..botList = const [_assistant];
-    addTearDown(state.dispose);
-    await tester.pumpWidget(_host(state));
-    expect(
-      tester.getTopLeft(_row('项目甲')).dy,
-      lessThan(tester.getTopLeft(_row('小宝')).dy),
-    );
-    await _pick(tester, '小宝', '置顶');
-    expect(state.settings.pinnedBots, {('desk', 'xb')});
-    expect(
-      tester.getTopLeft(_row('小宝')).dy,
-      lessThan(tester.getTopLeft(_row('项目甲')).dy),
-    );
-    expect(state.calls, isEmpty);
-    await _pick(tester, '小宝', '取消置顶');
-    expect(state.settings.pinnedBots, isEmpty);
-    expect(state.calls, isEmpty);
-  });
-
   testWidgets('助理只能删聊天，须确认，不会被删除', (tester) async {
     final state = _State()..botList = const [_assistant];
     addTearDown(state.dispose);
-    await tester.pumpWidget(_host(state));
+    await tester.pumpWidget(_host(state, botsTab: true));
     await _press(tester, '小宝');
     expect(find.text('删除该 Bot'), findsNothing);
     await tester.tap(find.text('删除该聊天'));
@@ -343,15 +334,21 @@ void main() {
     expect(state.calls.single.$3, {'bot': 'xb'});
   });
 
-  testWidgets('Bot 页置顶排到最前，普通 Bot 能删除并清掉置顶，也能进资料', (tester) async {
+  testWidgets('Bot 长按置顶只存手机，普通 Bot 能删除并清掉置顶，也能进资料', (tester) async {
     final state = _State()..botList = const [_assistant, _helper];
     addTearDown(state.dispose);
     await tester.pumpWidget(_host(state, botsTab: true));
     await _pick(tester, '帮手', '置顶');
-    expect(
-      tester.getTopLeft(_row('帮手')).dy,
-      lessThan(tester.getTopLeft(_row('小宝')).dy),
-    );
+    expect(state.settings.pinnedBots, {('desk', 'hp')});
+    expect(state.calls, isEmpty);
+    await _press(tester, '帮手');
+    expect(find.text('取消置顶'), findsOneWidget);
+    await tester.tapAt(const Offset(2, 590));
+    await tester.pumpAndSettle();
+    await _pick(tester, '帮手', '取消置顶');
+    expect(state.settings.pinnedBots, isEmpty);
+    expect(state.calls, isEmpty);
+    await _pick(tester, '帮手', '置顶');
     await _press(tester, '帮手');
     expect(find.text('Bot 资料'), findsOneWidget);
     await tester.tap(find.text('删除该 Bot'));
@@ -372,5 +369,86 @@ void main() {
     await _press(tester, '帮手');
     expect(find.text('置顶'), findsOneWidget);
     expect(find.text('删除该 Bot'), findsNothing);
+  });
+
+  testWidgets('Bot 页把群聊和 Bot 混在一个列表，置顶在前，再按最近时间', (tester) async {
+    final state = _State()
+      ..botList = [
+        LinkBot(id: 'old', name: '旧 Bot', updatedAt: DateTime(2026, 1)),
+        LinkBot(id: 'new', name: '新 Bot', updatedAt: DateTime(2026, 8)),
+      ]
+      ..groupList = [
+        LinkGroup(
+          id: 'g',
+          name: '群甲',
+          last: LinkGroupMessage(
+            seq: 1,
+            at: DateTime(2026, 5),
+            from: 'user',
+            text: '群消息',
+          ),
+        ),
+      ]
+      ..settings.pinnedGroups.add(('desk', 'g'))
+      ..settings.pinnedBots.add(('desk', 'old'));
+    addTearDown(state.dispose);
+    await tester.pumpWidget(_host(state, botsTab: true));
+    double top(String text) => tester.getTopLeft(_row(text)).dy;
+    // 置顶的群和 Bot 在最前，彼此再按时间；其余按时间。
+    expect(top('群甲'), lessThan(top('旧 Bot')));
+    expect(top('旧 Bot'), lessThan(top('新 Bot')));
+    // 不再有分组标题。
+    expect(find.text('群聊'), findsNothing);
+    expect(find.text('Bots'), findsNothing);
+    expect(
+      find.descendant(
+        of: _row('群甲'),
+        matching: find.byWidgetPredicate(
+          (widget) => widget is LucideIcon && widget.name == 'pin',
+        ),
+      ),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('群聊长按置顶与取消置顶，只存手机不发请求', (tester) async {
+    final state = _State()
+      ..groupList = [const LinkGroup(id: 'g', name: '群甲', members: [])];
+    addTearDown(state.dispose);
+    await tester.pumpWidget(_host(state, botsTab: true));
+    await _pick(tester, '群甲', '置顶');
+    expect(state.settings.pinnedGroups, {('desk', 'g')});
+    expect(state.calls, isEmpty);
+    await _pick(tester, '群甲', '取消置顶');
+    expect(state.settings.pinnedGroups, isEmpty);
+    expect(state.calls, isEmpty);
+  });
+
+  testWidgets('Bot 页右上角只有一个加号，菜单里发起群聊与添加 Bot', (tester) async {
+    final state = _State()..botList = const [_helper];
+    addTearDown(state.dispose);
+    await tester.pumpWidget(_host(state, botsTab: true));
+    expect(find.byTooltip('新建'), findsOneWidget);
+    await tester.tap(find.byTooltip('新建'));
+    await tester.pumpAndSettle();
+    expect(find.text('发起群聊'), findsOneWidget);
+    expect(find.text('添加 Bot'), findsOneWidget);
+    await tester.tapAt(const Offset(2, 590));
+    await tester.pumpAndSettle();
+    expect(state.calls, isEmpty);
+  });
+
+  testWidgets('群聊长按能删除：确认后请求电脑、刷新并清掉置顶', (tester) async {
+    final state = _State()
+      ..groupList = [const LinkGroup(id: 'g', name: '群甲')]
+      ..settings.pinnedGroups.add(('desk', 'g'));
+    addTearDown(state.dispose);
+    await tester.pumpWidget(_host(state, botsTab: true));
+    await _pick(tester, '群甲', '删除群聊');
+    await tester.tap(find.widgetWithText(FilledButton, '确认'));
+    await tester.pumpAndSettle();
+    expect(state.calls.single.$2, LinkMethods.deleteGroup);
+    expect(state.calls.single.$3, {'group': 'g'});
+    expect(state.settings.pinnedGroups, isEmpty);
   });
 }

@@ -217,6 +217,10 @@ typedef PhoneLinkNodeFactory = Future<LinkNode> Function(
   List<String> relays,
 );
 
+class _SessionOpen {
+  bool resync = false;
+}
+
 class PhoneLink extends ChangeNotifier {
   PhoneLink({
     required this._store,
@@ -239,6 +243,9 @@ class PhoneLink extends ChangeNotifier {
   final _inflight = <KeptDesktop>[];
   final _desktops = <String, KeptDesktop>{};
   final _peers = <String, LinkPeer>{};
+  // 每台电脑独立持有原始会话基线；换连接不丢，撤销信任才清理。
+  final _mirrors = <String, LinkSessionMirror>{};
+  final _sessionOpens = <(LinkPeer, String), Set<_SessionOpen>>{};
   final _replies = <LinkPeer, int>{};
   final _verifying = <LinkPeer, Future<void>>{};
   int _requestSerial = 0;
@@ -248,10 +255,14 @@ class PhoneLink extends ChangeNotifier {
   final _states = <String, Map<String, Object?>>{};
   final _attempts = <PairingAttempt>{};
   final _timers = <String, Timer>{};
+  final _stateTimers = <String, Timer>{};
   final _dialing = <String>{};
   final _seen = <String, int>{};
   final _delays = <String, int>{};
   final _generations = <String, int>{};
+
+  /// 重连后第一个快照失败时的续取次数，取到即清；连接一换就作废。
+  final _stateTries = <String, int>{};
   final _unsavedAddresses = <String>{};
   final _connecting = <String>{};
   final _events = StreamController<DesktopEvent>.broadcast();
@@ -293,9 +304,10 @@ class PhoneLink extends ChangeNotifier {
   /// noticed yet (the idle timeout is 20 seconds): asks each desktop, and
   /// connects anew to one that does not answer in [timeout]. Shows as
   /// connecting only past [quietFor], so a healthy check does not flicker.
+  /// 手机刚唤醒、无线电还在恢复时首包常要一秒多，所以 [quietFor] 给 2 秒。
   Future<void> verifyConnections({
     Duration timeout = const Duration(seconds: 4),
-    Duration quietFor = const Duration(milliseconds: 800),
+    Duration quietFor = const Duration(seconds: 2),
   }) async {
     await Future.wait([
       for (final MapEntry(key: id, value: peer) in _peers.entries.toList())
@@ -521,7 +533,10 @@ class PhoneLink extends ChangeNotifier {
     }
     final LinkPeer peer;
     try {
-      peer = await LinkPeer.connect(connection, mirror: LinkSessionMirror());
+      peer = await LinkPeer.connect(
+        connection,
+        mirror: _mirrors.putIfAbsent(address.id, LinkSessionMirror.new),
+      );
     } catch (_) {
       connection.close();
       rethrow;
@@ -817,12 +832,48 @@ class PhoneLink extends ChangeNotifier {
     // Never replay RPCs: a lost answer does not mean a write did not happen.
     final request = ++_requestSerial;
     try {
-      final result = await peer.call(method, params);
+      final result = method == LinkMethods.open && params['session'] is String
+          ? await _openSession(desktopId, peer, params)
+          : await peer.call(method, params);
       _replied(desktopId, peer, request);
       return result;
     } on LinkRemoteException {
       _replied(desktopId, peer, request);
       rethrow;
+    }
+  }
+
+  /// 只有只读 open 可以在基线失配后重开一次；写请求绝不重放。
+  /// resync 期间不能把空结果或原始 start>0 首包交给 AppState 当快照。
+  Future<Object?> _openSession(
+    String desktopId,
+    LinkPeer peer,
+    Map<String, Object?> params,
+  ) async {
+    final session = params['session']! as String;
+    final key = (peer, session);
+    final reading = _SessionOpen();
+    final readers = _sessionOpens.putIfAbsent(key, () => {});
+    readers.add(reading);
+    try {
+      for (var attempt = 0; attempt < 2; attempt++) {
+        reading.resync = false;
+        final result = await peer.call(LinkMethods.open, params);
+        if (_disposed || _peers[desktopId] != peer) {
+          throw const LinkClosedException();
+        }
+        if (!reading.resync &&
+            result is Map<String, Object?> &&
+            result['session'] == session &&
+            result['start'] == 0) {
+          return result;
+        }
+        params = {...params}..remove('have');
+      }
+      throw const FormatException('会话快照需要重新同步');
+    } finally {
+      readers.remove(reading);
+      if (readers.isEmpty) _sessionOpens.remove(key);
     }
   }
 
@@ -882,6 +933,8 @@ class PhoneLink extends ChangeNotifier {
       return;
     }
     _timers.remove(desktopId)?.cancel();
+    _stateTimers.remove(desktopId)?.cancel();
+    _stateTries.remove(desktopId);
     final generation = (_generations[desktopId] ?? 0) + 1;
     _generations[desktopId] = generation;
     bool current() =>
@@ -940,7 +993,16 @@ class PhoneLink extends ChangeNotifier {
       _connecting.remove(desktopId);
       _changed();
       _syncNode();
-      await _refreshState(desktopId, peer);
+      // 已经认证好的连接不因首个快照没取到就拆掉：那不是连接失败，重拨
+      // 只会让本来就差的网络再绕一圈。稍后再取一次。
+      final attached = peer;
+      peer = null;
+      _stateTries.remove(desktopId);
+      try {
+        await _refreshState(desktopId, attached);
+      } on Object {
+        if (current() && _peers[desktopId] == attached) _retryState(desktopId);
+      }
     } catch (_) {
       if (peer != null) await peer.close();
       if (current()) {
@@ -969,6 +1031,18 @@ class PhoneLink extends ChangeNotifier {
         _adoptPolicy(id, _states[id]!);
       }
       if (_disposed) return;
+      if (event.data case {'session': final String session}
+          when event.name == LinkEvents.resync) {
+        final readers = _sessionOpens[(peer, session)];
+        if (readers != null) {
+          // 当前 open 自己负责完整重开；避免 AppState 合并到同一个失败的
+          // refresh Future，或把那次空结果提前标成同步成功。
+          for (final reading in readers) {
+            reading.resync = true;
+          }
+          return;
+        }
+      }
       _events.add(DesktopEvent(id, event.name, event.data));
       if (event.name == LinkEvents.unpaired) {
         unawaited(_forget(id, tellDesktop: false).catchError((Object _) {}));
@@ -1038,6 +1112,29 @@ class PhoneLink extends ChangeNotifier {
     _adoptPolicy(id, state);
   }
 
+  /// 连上之后第一个快照没取到：这条连接留着，隔几秒在这条连接上再取，
+  /// 放弃了才算断（由连接自己的结束去重拨）。旧状态照旧显示。
+  void _retryState(String id) {
+    final peer = _peers[id];
+    if (peer == null || _stateTimers.containsKey(id)) return;
+    final tries = (_stateTries[id] ?? 0) + 1;
+    if (tries > 3) return;
+    _stateTries[id] = tries;
+    _stateTimers[id] = Timer(Duration(seconds: 2 << (tries - 1)), () {
+      _stateTimers.remove(id);
+      if (_disposed || _peers[id] != peer) return;
+      unawaited(
+        _refreshState(id, peer)
+            .then((_) {
+              if (_peers[id] == peer) _stateTries.remove(id);
+            })
+            .catchError((Object _) {
+              if (!_disposed && _peers[id] == peer) _retryState(id);
+            }),
+      );
+    });
+  }
+
   /// When the phone last had a live connection to [desktopId]; kept under
   /// its own key so it never rides on the trusted desktops' writes.
   DateTime? lastSeenOf(String desktopId) => switch (_seen[desktopId]) {
@@ -1083,9 +1180,12 @@ class PhoneLink extends ChangeNotifier {
     _checkAlive();
     _generations[id] = (_generations[id] ?? 0) + 1;
     _timers.remove(id)?.cancel();
+    _stateTimers.remove(id)?.cancel();
+    _stateTries.remove(id);
     _delays.remove(id);
     _connecting.remove(id);
     _desktops.remove(id);
+    _mirrors.remove(id);
     _states.remove(id);
     _unsavedAddresses.remove(id);
     final peer = _peers.remove(id);
@@ -1178,6 +1278,7 @@ class PhoneLink extends ChangeNotifier {
       await cancelPairing(attempt);
     }
     final peers = <LinkPeer>[];
+    _mirrors.clear();
     for (final id in _desktops.keys.toList()) {
       _generations[id] = (_generations[id] ?? 0) + 1;
       _timers.remove(id)?.cancel();
@@ -1232,6 +1333,11 @@ class PhoneLink extends ChangeNotifier {
       timer.cancel();
     }
     _timers.clear();
+    for (final timer in _stateTimers.values) {
+      timer.cancel();
+    }
+    _stateTimers.clear();
+    _stateTries.clear();
     for (final attempt in _attempts) {
       unawaited(attempt._peer.close());
     }
@@ -1244,6 +1350,8 @@ class PhoneLink extends ChangeNotifier {
       unawaited(peer.close());
     }
     _peers.clear();
+    _mirrors.clear();
+    _sessionOpens.clear();
     _replies.clear();
     _verifying.clear();
     for (final subscription in _pathSubscriptions.values) {

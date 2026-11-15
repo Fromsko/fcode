@@ -12,9 +12,13 @@ extension _Composer on _ChatPageState {
 
   /// 清空输入：文字、待发图片和 @ 提及。正在编辑时只清内容，不退出编辑。
   void _clearInput() {
-    if (_composer.text.trim().isEmpty && _images.isEmpty) return;
+    if (_composer.text.trim().isEmpty && _images.isEmpty && _files.isEmpty) {
+      return;
+    }
     setState(() {
       _images.clear();
+      _files.clear();
+      _fileSelection = null;
       _mentions.clear();
       _imagesMissing = false;
       _composer.clear();
@@ -25,7 +29,8 @@ extension _Composer on _ChatPageState {
   /// 有东西可清时才出现的橡皮。
   Widget _clearButton() => ValueListenableBuilder<TextEditingValue>(
     valueListenable: _composer,
-    builder: (context, value, _) => value.text.trim().isEmpty && _images.isEmpty
+    builder: (context, value, _) =>
+        value.text.trim().isEmpty && _images.isEmpty && _files.isEmpty
         ? const SizedBox.shrink()
         : IconButton(
             tooltip: tr('清空输入', 'Clear input'),
@@ -38,19 +43,24 @@ extension _Composer on _ChatPageState {
   /// Puts the draft on the phone's queue and clears the input; nothing is
   /// sent until the turn ends.
   void _queueDraft() {
-    final text = _composer.text;
+    _botReplySuggestions.dismiss();
+    final input = _input;
+    final assembled = assembleInput(input);
     widget.state.localQueue.add(
       widget.desktopId,
       _sessionId,
-      text: text,
-      images: List.of(_images),
-      mentions: _mentions.where((path) => text.contains('@$path')).toList(),
+      text: assembled.text,
+      images: input.images,
+      mentions: assembled.mentions,
+      draft: input,
       project: widget.projectId,
       bot: widget.botId,
     );
     setState(() {
       _error = null;
       _images.clear();
+      _files.clear();
+      _fileSelection = null;
       _mentions.clear();
       _composer.clear();
     });
@@ -58,7 +68,7 @@ extension _Composer on _ChatPageState {
   }
 
   Future<void> _localNow(LocalQueuedMessage message) async {
-    if (!_online || _sending) return;
+    if (!_online || _sending || _uploading) return;
     final sent = await widget.state.localQueue.sendNow(
       widget.desktopId,
       _sessionId,
@@ -85,9 +95,17 @@ extension _Composer on _ChatPageState {
       return;
     }
     final draft = _composer.text.trim();
-    _images.addAll(taken.images);
-    _mentions.addAll(taken.mentions);
-    _composer.text = draft.isEmpty ? taken.text : '$draft\n${taken.text}';
+    final restored =
+        taken.draft ??
+        InputDraft(
+          text: taken.text,
+          images: taken.images,
+          mentions: taken.mentions.toSet(),
+        );
+    _images.addAll(restored.images);
+    _files.addAll(restored.files);
+    _mentions.addAll(restored.mentions);
+    _composer.text = draft.isEmpty ? restored.text : '$draft\n${restored.text}';
     _composer.selection = TextSelection.collapsed(
       offset: _composer.text.length,
     );
@@ -113,7 +131,10 @@ extension _Composer on _ChatPageState {
         ValueListenableBuilder<TextEditingValue>(
           valueListenable: _composer,
           builder: (context, value, _) {
-            final hasDraft = value.text.trim().isNotEmpty || _images.isNotEmpty;
+            final hasDraft =
+                value.text.trim().isNotEmpty ||
+                _images.isNotEmpty ||
+                _files.isNotEmpty;
             if (!hasDraft && held == 0) return const SizedBox.shrink();
             final status = _status;
             return ComposerNotice(
@@ -158,7 +179,9 @@ extension _Composer on _ChatPageState {
           tone: Theme.of(context).colorScheme.error,
           title: failure,
           actionLabel: tr('重试', 'Retry'),
-          onAction: () => queue.retry(widget.desktopId, _sessionId),
+          onAction: _uploading
+              ? null
+              : () => queue.retry(widget.desktopId, _sessionId),
         ),
     ];
     if (_editIndex != null) return offline;
@@ -175,6 +198,7 @@ extension _Composer on _ChatPageState {
               _online &&
               !_commandBusy &&
               !_sending &&
+              !_uploading &&
               !queue.busy(widget.desktopId, _sessionId),
           onSendNow: _localNow,
           onEdit: _localEdit,
@@ -204,7 +228,7 @@ extension _Composer on _ChatPageState {
           ? tr('将中断并丢弃后续', 'Stops this turn, drops what follows')
           : tr('后续对话将被丢弃', 'Drops what follows'),
       actionLabel: tr('取消', 'Cancel'),
-      onAction: _sending ? null : _cancelEdit,
+      onAction: _sending || _uploading ? null : _cancelEdit,
     ),
   );
 
@@ -291,51 +315,10 @@ extension _Composer on _ChatPageState {
 
   Future<void> _pickImages({ImageSource? source}) async {
     _composerFocus.unfocus();
-    if (_picking) return;
+    if (_picking || _uploading || _sending) return;
     setState(() => _picking = true);
     try {
-      final List<XFile> files;
-      if (source == ImageSource.camera) {
-        final file = await ImagePicker().pickImage(source: ImageSource.camera);
-        files = file == null ? [] : [file];
-      } else {
-        files = await ImagePicker().pickMultiImage();
-      }
-      final picked = <DraftImage>[];
-      for (final file in files) {
-        if (await file.length() >= LinkLimits.image) {
-          throw UserFacingError(
-            tr('每张图片必须小于 8 MB', 'Each image must be under 8 MB'),
-          );
-        }
-        final bytes = await file.readAsBytes();
-        if (4 * ((bytes.length + 2) ~/ 3) >= LinkLimits.image) {
-          throw UserFacingError(
-            tr(
-              '图片的 base64 数据必须小于 8 MB',
-              'Base64 image data must be under 8 MB',
-            ),
-          );
-        }
-        final type =
-            file.mimeType ??
-            switch (file.name.toLowerCase().split('.').last) {
-              'png' => 'image/png',
-              'gif' => 'image/gif',
-              'webp' => 'image/webp',
-              'jpg' || 'jpeg' => 'image/jpeg',
-              _ => '',
-            };
-        if (![
-          'image/png',
-          'image/jpeg',
-          'image/gif',
-          'image/webp',
-        ].contains(type)) {
-          throw UserFacingError(tr('不支持此图片格式', 'Unsupported image format'));
-        }
-        picked.add(DraftImage(file.name, type, bytes));
-      }
+      final picked = await pickConversationImages(widget.state, source: source);
       if (mounted && picked.isNotEmpty) {
         _images.addAll(picked);
         _draftChanged();
@@ -362,15 +345,7 @@ extension _Composer on _ChatPageState {
     if (!mounted) return;
     _composerFocus.requestFocus();
     if (selected == null) return;
-    _mentions.add(selected);
-    final selection = _composer.selection;
-    final start = selection.isValid ? selection.start : _composer.text.length;
-    final end = selection.isValid ? selection.end : start;
-    final insert = '@$selected ';
-    _composer.value = TextEditingValue(
-      text: _composer.text.replaceRange(start, end, insert),
-      selection: TextSelection.collapsed(offset: start + insert.length),
-    );
+    _insertFileMention(selected);
   }
 
   /// 输入框以 `/` 开头时的命令列表：内置的常用命令、电脑上的技能和项目命令。
@@ -510,16 +485,6 @@ extension _Composer on _ChatPageState {
 
   static const _maxProjectCommands = 50;
 
-  /// 输入框的底：白底、一圈细边、圆角。上面那排摘要单独一块，不在这块里。
-  BoxDecoration get _composerDecoration => BoxDecoration(
-    color: Theme.of(context).colorScheme.surfaceContainerLowest,
-    border: Border.all(
-      color: Theme.of(context).colorScheme.onSurfaceVariant
-          .withValues(alpha: .18),
-    ),
-    borderRadius: BorderRadius.circular(22),
-  );
-
   Widget _draftImages() {
     // 待发附件共用一个画廊；移除某张后组随之重建。
     final group = [
@@ -534,32 +499,72 @@ extension _Composer on _ChatPageState {
     final thumbnail = bot ? 64.0 : 76.0;
     final bottom = bot ? 0.0 : 8.0;
     return SizedBox(
-      height: thumbnail + 8 + bottom,
+      // 文件卡：一行名字加最多两行状态，大字号时随之放高。
+      height:
+          (_files.isEmpty
+              ? thumbnail
+              : math.max(
+                  thumbnail,
+                  MobileSpace.sm * 2 +
+                      60 * MediaQuery.textScalerOf(context).scale(1),
+                )) +
+          8 +
+          bottom,
       child: ListView.separated(
         padding: EdgeInsets.fromLTRB(12, 8, 12, bottom),
         scrollDirection: Axis.horizontal,
-        itemCount: _images.length,
+        itemCount: _images.length + _files.length,
         separatorBuilder: (_, _) => const SizedBox(width: 8),
-        itemBuilder: (context, i) => SizedBox.square(
-          dimension: thumbnail,
-          child: Stack(
-            children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(bot ? 6 : 12),
-                child: MemoryPicture(
-                  bytes: _images[i].bytes,
-                  name: _images[i].name,
-                  group: group,
-                  index: i,
-                  width: thumbnail,
-                  height: thumbnail,
-                  fit: BoxFit.cover,
-                ),
+        itemBuilder: (context, i) {
+          if (i >= _images.length) {
+            final file = _files[i - _images.length];
+            final pending = file.status == DraftFileStatus.uploading;
+            return SizedBox(
+              width: bot ? 184 : 200,
+              child: FileAttachment(
+                name: file.name,
+                path: file.path,
+                size: file.size,
+                nameLines: 1,
+                bot: bot,
+                uploading: pending,
+                failed: !file.ready && !pending,
+                status: switch (file.status) {
+                  DraftFileStatus.uploading => tr('上传中', 'Uploading'),
+                  DraftFileStatus.ready => null,
+                  DraftFileStatus.failed =>
+                    file.error ?? tr('上传失败', 'Upload failed'),
+                  DraftFileStatus.unconfirmed =>
+                    file.error ??
+                        tr('上传未确认，请重新选择', 'Upload unconfirmed; select again'),
+                },
+                detail: file.error,
+                removeLabel: tr('移除文件', 'Remove file'),
+                onRemove: _sending ? null : () => _removeFile(file),
               ),
-              Positioned(right: 0, top: 0, child: _removeImageBadge(i)),
-            ],
-          ),
-        ),
+            );
+          }
+          return SizedBox.square(
+            dimension: thumbnail,
+            child: Stack(
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(bot ? 6 : 12),
+                  child: MemoryPicture(
+                    bytes: _images[i].bytes,
+                    name: _images[i].name,
+                    group: group,
+                    index: i,
+                    width: thumbnail,
+                    height: thumbnail,
+                    fit: BoxFit.cover,
+                  ),
+                ),
+                Positioned(right: 0, top: 0, child: _removeImageBadge(i)),
+              ],
+            ),
+          );
+        },
       ),
     );
   }
@@ -597,44 +602,16 @@ extension _Composer on _ChatPageState {
     ),
   );
 
-  /// 工作时没写东西，发送键就是停止：两个输入栏都用这一个。
-  Widget _stopAction({required double size}) => StopActionButton(
-    busy: _commandBusy,
-    size: size,
-    iconSize: 26,
-    tooltip: _commandBusy
-        ? tr('正在停止…', 'Stopping…')
-        : tr('停止生成', 'Stop generation'),
-    onPressed: () => _command(LinkMethods.stop),
-  );
-
   /// 同一行放输入框和按钮，面板接在下方顶替键盘，和常见聊天软件一样。
   Widget _botComposer(SessionBuffer buffer, bool ready) {
     final scheme = Theme.of(context).colorScheme;
     final line = BorderSide(color: scheme.outlineVariant, width: .5);
     final notices = _composerNotices();
-    final emoji = _addOpen && _emojiPanel;
-    IconButton button(String tooltip, Widget icon, VoidCallback? onPressed) =>
-        IconButton(
-          tooltip: tooltip,
-          onPressed: onPressed,
-          padding: EdgeInsets.zero,
-          // 和单行输入框等高，底边对齐。
-          style: IconButton.styleFrom(
-            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-          ),
-          constraints: BoxConstraints.tight(const Size.square(44)),
-          iconSize: 28,
-          icon: icon,
-        );
     final working = buffer.live && _online;
     final bar = TapRegion(
-      onTapOutside: (_) => _closeAdd(),
+      onTapOutside: (_) => closeAdd(),
       child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: scheme.surfaceBright,
-          border: Border(top: line),
-        ),
+        decoration: const BoxDecoration(),
         child: SafeArea(
           top: false,
           child: Column(
@@ -648,140 +625,54 @@ extension _Composer on _ChatPageState {
                     children: notices,
                   ),
                 ),
-              if (_images.isNotEmpty) _draftImages(),
+              if (_images.isNotEmpty || _files.isNotEmpty) _draftImages(),
               Padding(
-                padding: const EdgeInsets.fromLTRB(12, 8, 6, 8),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.end,
+                padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    Expanded(
-                      child: DecoratedBox(
-                        key: const ValueKey('composer-input-surface'),
-                        decoration: BoxDecoration(
-                          color: scheme.surfaceContainerLowest,
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            if (_editIndex != null) _editHeader(buffer),
-                            _pasteScope(
-                              TextField(
-                                controller: _composer,
-                                focusNode: _composerFocus,
-                                contextMenuBuilder: _pasteMenu,
-                                onTap: _addToKeyboard,
-                                style: Theme.of(context).textTheme.bodyMedium,
-                                minLines: 1,
-                                maxLines: 5,
-                                decoration: InputDecoration(
-                                  filled: false,
-                                  isDense: true,
-                                  border: InputBorder.none,
-                                  enabledBorder: InputBorder.none,
-                                  focusedBorder: InputBorder.none,
-                                  disabledBorder: InputBorder.none,
-                                  contentPadding: EdgeInsets.fromLTRB(
-                                    12,
-                                    _editIndex != null ? 2 : 11,
-                                    12,
-                                    11,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
+                    _pasteScope(
+                      ValueListenableBuilder<TextEditingValue>(
+                        valueListenable: _composer,
+                        builder: (context, value, _) {
+                          final empty =
+                              value.text.trim().isEmpty &&
+                              _images.isEmpty &&
+                              _files.isEmpty;
+                          return ChatInputBar(
+                            tr: tr,
+                            controller: _composer,
+                            focusNode: _composerFocus,
+                            hint: tr('发消息…', 'Message…'),
+                            enabled: ready,
+                            canSend:
+                                ready &&
+                                !empty &&
+                                !_imagesMissing &&
+                                _filesReady,
+                            busy: _sending,
+                            onSend: _send,
+                            onAdd: ready ? toggleAdd : null,
+                            onFieldTap: addToKeyboard,
+                            stop: working && empty && !_sending
+                                ? () => _command(LinkMethods.stop)
+                                : null,
+                            stopBusy: _commandBusy,
+                            contextMenuBuilder: _pasteMenu,
+                          );
+                        },
                       ),
-                    ),
-                    const SizedBox(width: 4),
-                    _clearButton(),
-                    button(
-                      emoji ? tr('键盘', 'Keyboard') : tr('表情', 'Emoji'),
-                      Icon(
-                        emoji
-                            ? Icons.keyboard_alt_outlined
-                            : Icons.sentiment_satisfied_alt,
-                      ),
-                      _toggleEmoji,
-                    ),
-                    button(
-                      tr('添加附件', 'Add attachment'),
-                      const Icon(Icons.add_circle_outline),
-                      ready ? _toggleAdd : null,
-                    ),
-                    // 和普通对话一样只有一个按钮：工作中没写东西时是停止，写了就是发送。
-                    ValueListenableBuilder<TextEditingValue>(
-                      valueListenable: _composer,
-                      builder: (context, value, _) =>
-                          value.text.trim().isEmpty && _images.isEmpty
-                          ? working && !_sending
-                                ? _stopAction(size: 44)
-                                : const SizedBox.shrink()
-                          : Padding(
-                              padding: const EdgeInsets.fromLTRB(4, 4, 6, 4),
-                              child: Tooltip(
-                                message: _editIndex != null
-                                    ? tr('重新发送', 'Resend')
-                                    : tr('发送', 'Send'),
-                                child: FilledButton(
-                                  style: FilledButton.styleFrom(
-                                    minimumSize: const Size(
-                                      56,
-                                      MobileSizes.button,
-                                    ),
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 12,
-                                    ),
-                                    tapTargetSize:
-                                        MaterialTapTargetSize.shrinkWrap,
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(6),
-                                    ),
-                                  ),
-                                  onPressed:
-                                      ready && !_imagesMissing && _editReady
-                                      ? _send
-                                      : null,
-                                  child: Text(tr('发送', 'Send')),
-                                ),
-                              ),
-                            ),
                     ),
                   ],
                 ),
               ),
-              if (_addOpen)
+              if (addOpen)
                 DecoratedBox(
                   decoration: BoxDecoration(border: Border(top: line)),
-                  child: emoji
-                      ? SizedBox(
-                          key: const ValueKey('chat-emoji'),
-                          height: math.max(
-                            0,
-                            _panelHeight -
-                                MediaQuery.viewInsetsOf(context).bottom,
-                          ),
-                          child: EmojiPanel(
-                            composer: _composer,
-                            canSend: () =>
-                                ready && !_imagesMissing && _editReady,
-                            onPick: _insertEmoji,
-                            onDelete: _deleteBackward,
-                            onSend: _send,
-                            deleteLabel: tr('删除', 'Delete'),
-                            sendLabel: tr('发送', 'Send'),
-                          ),
-                        )
-                      : _addPanel(ready, topBorder: false),
+                  child: _addPanel(ready, topBorder: false),
                 )
-              else if (_reserve > 0)
-                SizedBox(
-                  height: math.max(
-                    0,
-                    _reserve - MediaQuery.viewInsetsOf(context).bottom,
-                  ),
-                ),
+              else
+                addReserve,
             ],
           ),
         ),
@@ -797,88 +688,19 @@ extension _Composer on _ChatPageState {
     );
   }
 
-  /// 加号面板里每格的图标边，和微信差不多大。
-  static const _addTile = 60.0;
-
-  /// 一行四列，从左往右填，填满再换行。
-  static const _addColumns = 4;
-
-  double get _keyboardHeight => _seenKeyboard ?? 280;
-
-  double get _panelHeight =>
-      math.min(_keyboardHeight, MediaQuery.sizeOf(context).height * .5);
-
-  void _closeAdd() {
-    if (_addOpen) setState(() => _addOpen = false);
-  }
-
-  /// Closes the panel for the keyboard: its room shrinks as the keyboard
-  /// rises, so the composer stays put.
-  void _addToKeyboard() {
-    if (!_addOpen) return;
-    setState(() {
-      _addOpen = false;
-      _reserve = _panelHeight;
-    });
-    _reserveTimer?.cancel();
-    _reserveTimer = Timer(const Duration(milliseconds: 600), () {
-      if (mounted) setState(() => _reserve = 0);
-    });
-  }
-
-  void _toggleAdd() => _togglePanel(emoji: false);
-
-  void _toggleEmoji() => _togglePanel(emoji: true);
-
-  /// 点当前面板的按钮回到键盘；另一个面板开着时直接切换。
-  void _togglePanel({required bool emoji}) {
-    if (_addOpen && _emojiPanel == emoji) {
-      _addToKeyboard();
-      _composerFocus.requestFocus();
-    } else {
-      _composerFocus.unfocus();
-      _reserveTimer?.cancel();
-      setState(() {
-        _addOpen = true;
-        _emojiPanel = emoji;
-        _reserve = 0;
-      });
-    }
-  }
-
-  void _insertEmoji(String emoji) {
-    final value = _composer.value;
-    final at = value.selection.isValid
-        ? value.selection
-        : TextSelection.collapsed(offset: value.text.length);
-    _composer.value = TextEditingValue(
-      text: value.text.replaceRange(at.start, at.end, emoji),
-      selection: TextSelection.collapsed(offset: at.start + emoji.length),
-    );
-  }
-
-  /// 退一格：选中的文字，或光标前一个完整字符（表情可能占多个码元）。
-  void _deleteBackward() {
-    final value = _composer.value;
-    final at = value.selection.isValid
-        ? value.selection
-        : TextSelection.collapsed(offset: value.text.length);
-    final before = at.isCollapsed
-        ? value.text.substring(0, at.start).characters.skipLast(1).string
-        : value.text.substring(0, at.start);
-    _composer.value = TextEditingValue(
-      text: before + value.text.substring(at.end),
-      selection: TextSelection.collapsed(offset: before.length),
-    );
-  }
-
   Widget _composerView(SessionBuffer buffer, bool ready) {
-    if (_composerFocus.hasFocus) {
-      final inset = MediaQuery.viewInsetsOf(context).bottom;
-      if (inset > math.max(_seenKeyboard ?? 0, 100)) _seenKeyboard = inset;
-    }
+    noteKeyboard(context);
     if (widget.botId != null) return _botComposer(buffer, ready);
     final live = buffer.live && _online;
+    Widget stop() => StopActionButton(
+      busy: _commandBusy,
+      size: 48,
+      iconSize: 26,
+      tooltip: _commandBusy
+          ? tr('正在停止…', 'Stopping…')
+          : tr('停止生成', 'Stop generation'),
+      onPressed: () => _command(LinkMethods.stop),
+    );
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -905,12 +727,13 @@ extension _Composer on _ChatPageState {
               _slashMenu(),
               DecoratedBox(
                 key: const ValueKey('composer-input-surface'),
-                decoration: _composerDecoration,
+                decoration: chatComposerDecoration(context),
+
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     if (_editIndex != null) _editHeader(buffer),
-                    if (_images.isNotEmpty) _draftImages(),
+                    if (_images.isNotEmpty || _files.isNotEmpty) _draftImages(),
                     _pasteScope(
                       TextField(
                         controller: _composer,
@@ -919,7 +742,7 @@ extension _Composer on _ChatPageState {
                         // Not outside the add panel: tapping here hands it to the
                         // keyboard rather than dropping it.
                         groupId: _addRegion,
-                        onTap: _addToKeyboard,
+                        onTap: addToKeyboard,
                         style: Theme.of(context).textTheme.bodyMedium,
                         minLines: 1,
                         maxLines: 6,
@@ -951,7 +774,9 @@ extension _Composer on _ChatPageState {
                             tooltip: tr('添加附件', 'Add attachment'),
                             // 和后面的选项按钮同为紧凑尺寸，图标间距才一致。
                             visualDensity: VisualDensity.compact,
-                            onPressed: _sending || _picking ? null : _toggleAdd,
+                            onPressed: _sending || _picking || _uploading
+                                ? null
+                                : toggleAdd,
                             icon: const LucideIcon('plus', size: 22),
                           ),
                         ),
@@ -973,17 +798,19 @@ extension _Composer on _ChatPageState {
                           builder: (context, value, _) {
                             final hasDraft =
                                 value.text.trim().isNotEmpty ||
-                                _images.isNotEmpty;
+                                _images.isNotEmpty ||
+                                _files.isNotEmpty;
                             final canSend =
                                 ready &&
                                 !_sending &&
                                 hasDraft &&
                                 !_imagesMissing &&
+                                _filesReady &&
                                 _editReady;
                             return Padding(
                               padding: const EdgeInsets.only(left: 4, right: 8),
                               child: live && !hasDraft && !_sending
-                                  ? _stopAction(size: 48)
+                                  ? stop()
                                   : ChatComposerAction(
                                       busy: _sending,
                                       enabled: canSend,
@@ -1004,146 +831,72 @@ extension _Composer on _ChatPageState {
           ),
         ),
         // 功能区铺满整行：灰底和上边线一直顶到屏幕两边才发现得出是另一块。
-        if (_addOpen && !_sending)
+        if (addOpen && !_sending)
           TapRegion(
             groupId: _addRegion,
-            onTapOutside: (_) => setState(() => _addOpen = false),
+            onTapOutside: (_) => setState(() => addOpen = false),
             child: _addPanel(ready),
           ),
-        if (!_addOpen && _reserve > 0)
-          SizedBox(
-            height: math.max(
-              0,
-              _reserve - MediaQuery.viewInsetsOf(context).bottom,
-            ),
-          ),
+        if (!addOpen) addReserve,
       ],
     );
   }
 
   Widget _addPanel(bool ready, {bool topBorder = true}) {
-    final scheme = Theme.of(context).colorScheme;
-    final media = MediaQuery.of(context);
     // 选完东西回到输入框：键盘跟着回来，接着打字。
     void pick(VoidCallback action) {
-      setState(() => _addOpen = false);
+      setState(() => addOpen = false);
       action();
       _composerFocus.requestFocus();
     }
 
-    final actions = <(String, String, String, VoidCallback?)>[
-      (
-        'album',
-        'images',
-        tr('相册', 'Photos'),
-        _picking || _sending ? null : _pickImages,
-      ),
-      (
-        'camera',
-        'camera',
-        tr('拍摄', 'Camera'),
-        _picking || _sending
-            ? null
-            : () => _pickImages(source: ImageSource.camera),
-      ),
-      // 模型、模式、权限在输入框下面那排，这里不再放一份；Bot 不在哪个项目里，没有文件可 @。
-      if (widget.botId == null)
-        (
-          'file',
-          'at-sign',
-          tr('文件', 'Files'),
-          ready && _project != null ? _mention : null,
-        ),
-    ];
+    ChatAddTile tile(
+      String id,
+      String icon,
+      String label,
+      VoidCallback? action,
+    ) => ChatAddTile(
+      id: id,
+      icon: icon,
+      label: label,
+      onTap: action == null ? null : () => pick(action),
+    );
 
-    return Container(
-      key: const ValueKey('chat-actions'),
-      // 铺满整行：放进居中的 Column 里也不会缩成内容宽，
-      // 灰底和上边线一直顶到两边。
-      width: double.infinity,
-      decoration: BoxDecoration(
-        color: scheme.surface,
-        border: topBorder
-            ? Border(top: BorderSide(color: scheme.outlineVariant, width: .5))
-            : null,
-      ),
-      // 和键盘一样高，格子少也不压扁；键盘还收着时先让出它占的高度，
-      // 滑下去时格子和键盘合起来不高过键盘原高，输入框不跳。
-      height: math.max(0, _panelHeight - media.viewInsets.bottom),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          const gap = 12.0, side = 16.0;
-          // 四列等宽，取整免得舍入误差把第四格挤到下一行。
-          final width =
-              ((constraints.maxWidth - side * 2 - gap * (_addColumns - 1)) /
-                      _addColumns)
-                  .floorToDouble();
-          // 格子尽量大，放大字号时也不超出一列。
-          final tile = math.min(media.textScaler.scale(_addTile), width);
-          return SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(side, 16, side, 8),
-            // 一行四列，从左往右填，填满再换行。
-            child: Wrap(
-              spacing: gap,
-              runSpacing: gap,
-              children: [
-                for (final (id, icon, title, onTap) in actions)
-                  SizedBox(
-                    key: ValueKey('chat-action-$id'),
-                    width: width,
-                    child: Tooltip(
-                      message: title,
-                      child: InkWell(
-                        borderRadius: BorderRadius.circular(14),
-                        onTap: onTap == null ? null : () => pick(onTap),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 7),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Container(
-                                width: tile,
-                                height: tile,
-                                decoration: BoxDecoration(
-                                  color: scheme.surfaceContainerLowest,
-                                  borderRadius: BorderRadius.circular(14),
-                                ),
-                                child: Center(
-                                  child: LucideIcon(
-                                    icon,
-                                    size: tile * .44,
-                                    color: onTap == null
-                                        ? scheme.onSurface.withValues(
-                                            alpha: .38,
-                                          )
-                                        : scheme.onSurface,
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                title,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                  fontSize: MobileType.secondary,
-                                  color: onTap == null
-                                      ? scheme.onSurface.withValues(alpha: .38)
-                                      : scheme.onSurfaceVariant,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          );
-        },
-      ),
+    return ChatAddPanel(
+      key: topBorder ? null : const ValueKey('chat-actions-inline'),
+      height: addPanelHeight,
+      tiles: [
+        tile(
+          'album',
+          'images',
+          tr('相册', 'Photos'),
+          _picking || _uploading || _sending ? null : _pickImages,
+        ),
+        tile(
+          'camera',
+          'camera',
+          tr('拍摄', 'Camera'),
+          _picking || _uploading || _sending
+              ? null
+              : () => _pickImages(source: ImageSource.camera),
+        ),
+        tile(
+          'upload',
+          'arrow-up',
+          tr('上传文件', 'Upload file'),
+          ready && (widget.botId != null || widget.projectId != null)
+              ? _pickFile
+              : null,
+        ),
+        // 模型、模式、权限在输入框下面那排；Bot 可上传文件，但不浏览项目。
+        if (widget.botId == null)
+          tile(
+            'file',
+            'at-sign',
+            tr('文件', 'Files'),
+            ready && _project != null ? _mention : null,
+          ),
+      ],
     );
   }
 }

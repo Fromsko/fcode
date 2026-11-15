@@ -48,7 +48,11 @@ void main() {
     final background = BackgroundConnection();
     addTearDown(background.dispose);
     var stopped = 0, networks = 0;
-    background.onStopped = () => stopped++;
+    var userStopped = false;
+    background.onStopped = (user) {
+      stopped++;
+      userStopped = user;
+    };
     background.onNetworkChanged = () => networks++;
     await background.initialize();
     await background.start(title: '后台连接', body: '接收更新', stopLabel: '停止');
@@ -59,9 +63,11 @@ void main() {
     await nativeEvent('statusChanged', {
       'running': false,
       'networkWatching': true,
+      'userStopped': true,
     });
     expect(background.running, isFalse);
     expect(stopped, 1);
+    expect(userStopped, isTrue);
     await nativeEvent('statusChanged', {
       'running': false,
       'networkWatching': true,

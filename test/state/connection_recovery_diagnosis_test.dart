@@ -54,7 +54,7 @@ class _OfflinePhone extends PhoneLink {
   @override
   Future<void> verifyConnections({
     Duration timeout = const Duration(seconds: 4),
-    Duration quietFor = const Duration(milliseconds: 800),
+    Duration quietFor = const Duration(seconds: 2),
   }) => checking.future;
 
   @override
@@ -370,14 +370,17 @@ void main() {
     await h.start();
     final gate = h.holdOpen = Completer<void>();
     h.openStarted = Completer<void>();
-    final first = h.state.resume();
+    final refreshing = h.state.refreshSession(
+      h.identity.id,
+      'synthetic-session',
+    );
     await h.openStarted!.future;
     await pumpEventQueue();
     final notifications = h.phone.networkChecks;
     final checks = h.phone.checks;
     final opens = h.calls.where((call) => call == '1:open').length;
 
-    final second = h.state.resume();
+    final resumed = h.state.resume();
     await pumpEventQueue();
     expect(h.phone.networkChecks, notifications + 1);
     expect(h.phone.checks, checks + 1);
@@ -385,7 +388,7 @@ void main() {
     expect(h.state.buffer(h.identity.id, 'synthetic-session').loading, isTrue);
 
     gate.complete();
-    await Future.wait([first, second]);
+    await Future.wait([refreshing, resumed]);
     expect(h.state.buffer(h.identity.id, 'synthetic-session').loading, isFalse);
   });
 
@@ -480,7 +483,7 @@ void main() {
     expect(h.connections, 1);
   });
 
-  test('连续唤醒合并连接检查和快照请求', () async {
+  test('连续唤醒合并连接检查，连接没变就不再重开快照', () async {
     final h = _Harness();
     addTearDown(h.close);
     await h.start();
@@ -489,11 +492,39 @@ void main() {
     final second = h.state.resume();
     await Future.wait([first, second]);
     expect(h.calls.where((call) => call == '1:state'), hasLength(1));
-    expect(h.calls.where((call) => call == '1:open'), hasLength(1));
+    expect(h.calls.where((call) => call == '1:open'), isEmpty);
     expect(h.connections, 1);
   });
 
-  test('回前台保留已展开的600条历史窗口和索引', () async {
+  test('从后台回来且连接没变不开快照，切网后的唤醒才核对', () async {
+    final h = _Harness();
+    addTearDown(h.close);
+    await h.start();
+    h.calls.clear();
+    h.state.setForeground(false);
+    h.state.setForeground(true);
+    await h.state.resume();
+    expect(h.calls.where((call) => call == '1:open'), isEmpty);
+    h.state.setForeground(false);
+    h.state.networkChanged();
+    h.state.setForeground(true);
+    await h.state.resume();
+    expect(h.calls.where((call) => call == '1:open'), hasLength(1));
+  });
+
+  test('连接代次变了仍要重开快照', () async {
+    final h = _Harness();
+    addTearDown(h.close);
+    await h.start();
+    h.calls.clear();
+    h.state.setForeground(false);
+    await h.phone.reconnect(h.identity.id);
+    h.state.setForeground(true);
+    await h.state.resume();
+    expect(h.calls.where((call) => call.endsWith(':open')), hasLength(1));
+  });
+
+  test('重连后重开快照仍保留已展开的600条历史窗口和索引', () async {
     final h = _Harness();
     addTearDown(h.close);
     await h.start();
@@ -507,6 +538,10 @@ void main() {
       hasLength(600),
     );
 
+    // 同一条连接不再重取；连接代次变了才重开，且窗口不缩回去。
+    await h.state.resume();
+    expect(h.windows.last, 60);
+    await h.phone.reconnect(h.identity.id);
     await h.state.resume();
     expect(h.windows.last, 600);
     expect(h.payloadBytes.last, greaterThan(shortBytes * 9));

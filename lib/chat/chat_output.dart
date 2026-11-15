@@ -158,7 +158,13 @@ String planKey(PlanItem plan) => '${plan.round}:${plan.path}';
 
 /// 和 Bot 的聊天只显示说的话和发的东西；App 发给它的内部通知和干活的过程不算。
 bool shownInBotChat(ChatItem? item) => switch (item) {
-  null || AssistantTextItem() || NoticeItem() => true,
+  null || NoticeItem(kind: NoticeKind.error) => true,
+  NoticeItem() => false,
+  AssistantTextItem(:final text) =>
+    ChatCodec.botVisibleText(text).isNotEmpty ||
+        ChatCodec.botParts(text).any((part) => part.$1 == ChatCodec.botCardTag),
+  ToolCallItem(tool: ChatCodec.botSendTool) =>
+    ChatCodec.botSentToUser(item) != null,
   final UserMessageItem user => ChatCodec.botEvent(user) == null,
   ToolCallItem(:final input) when input['sticker'] is String => true,
   final ToolCallItem tool when ChatCodec.botImageUrl(tool) != null => true,
@@ -167,14 +173,22 @@ bool shownInBotChat(ChatItem? item) => switch (item) {
 
 /// Bot 聊天的行：每个做完的回合在最后一句话前有一行“已处理”，过程收在它
 /// 里面，点开另看。
-List<ChatRow> botRows(List<Object?> items) {
+List<ChatRow> botRows(List<Object?> items, {bool startsAtBeginning = true}) {
   final decoded = decodeItems(items);
+  final places = ChatCodec.botPlaces(
+    decoded,
+    startsAtBeginning: startsAtBeginning,
+  );
   ChatItem at(int index) =>
       decoded[index] ?? const NoticeItem(NoticeKind.info, '');
   final lines = <int, (StepFold, UserMessageItem)>{};
   for (var prompt = 0; prompt < items.length; prompt++) {
     final message = decoded[prompt];
-    if (message is! UserMessageItem || message.worked == null) continue;
+    if (message is! UserMessageItem ||
+        message.worked == null ||
+        places[prompt] != null) {
+      continue;
+    }
     var end = prompt + 1;
     while (end < items.length && decoded[end] is! UserMessageItem) {
       end++;
@@ -191,6 +205,7 @@ List<ChatRow> botRows(List<Object?> items) {
   }
   final rows = <ChatRow>[];
   for (var i = 0; i < items.length; i++) {
+    if (places[i] != null) continue;
     if (lines[i] case (final fold, final prompt)) {
       rows.add(
         ChatRow.fold(
@@ -201,7 +216,9 @@ List<ChatRow> botRows(List<Object?> items) {
           work: fold,
           foldItems: [
             for (var j = fold.start; j < fold.end; j++)
-              if (!shownInBotChat(decoded[j]) && decoded[j] is! LiveStatusItem)
+              if (places[j] == null &&
+                  !shownInBotChat(decoded[j]) &&
+                  decoded[j] is! LiveStatusItem)
                 at(j),
           ],
           // 由内部通知唤醒的回合没有消息带时间，写在这一行上。
@@ -214,6 +231,58 @@ List<ChatRow> botRows(List<Object?> items) {
     }
   }
   return rows;
+}
+
+/// 推荐只属于当前私聊轮次。关闭、换会话或选用后不复活旧建议。
+class BotReplySuggestions {
+  Object? _conversation;
+  int? _epoch;
+  String? _turn, _blockedTurn;
+
+  void dismiss() => _blockedTurn = _turn;
+
+  List<String> update({
+    required Object conversation,
+    required int epoch,
+    required bool enabled,
+    required bool live,
+    required List<Object?> items,
+    bool startsAtBeginning = true,
+  }) {
+    final decoded = decodeItems(items);
+    final places = ChatCodec.botPlaces(
+      decoded,
+      startsAtBeginning: startsAtBeginning,
+    );
+    var prompt = -1;
+    for (var i = 0; i < decoded.length; i++) {
+      if (decoded[i] is UserMessageItem) prompt = i;
+    }
+    final user = prompt < 0 ? null : decoded[prompt] as UserMessageItem;
+    _turn = user == null
+        ? ''
+        : '${user.sentAt?.millisecondsSinceEpoch}:${user.text}:${user.images.length}';
+    if (_conversation != conversation || _epoch != epoch) {
+      _conversation = conversation;
+      _epoch = epoch;
+      _blockedTurn = _turn;
+    }
+    if (!enabled ||
+        live ||
+        _turn == _blockedTurn ||
+        prompt < 0 ||
+        places[prompt] != null) {
+      return const [];
+    }
+    for (var i = decoded.length - 1; i > prompt; i--) {
+      if (decoded[i] case AssistantTextItem(:final text)
+          when places[i] == null) {
+        final suggestions = ChatCodec.botSuggestions(text);
+        if (suggestions.isNotEmpty) return suggestions;
+      }
+    }
+    return const [];
+  }
 }
 
 /// The rows a history shows, folded the desktop way: each run of at least

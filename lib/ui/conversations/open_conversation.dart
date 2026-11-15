@@ -65,10 +65,12 @@ Future<void> openConversation(
       desktopId: desktopId,
       sessionId: sessionId,
     );
+    if (!context.mounted) return;
     // 未列出时仍可用已有 open 只读确认；不修改归档、项目或权限。
     await openPage<void>(
       context,
       ChatPage(
+        key: ValueKey('chat-$desktopId-${target.sessionId}'),
         state: state,
         desktopId: desktopId,
         sessionId: target.sessionId,

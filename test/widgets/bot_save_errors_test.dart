@@ -36,7 +36,11 @@ void main() {
         home: BotEditPage(state: state, ref: ref),
       ),
     );
-    await tester.tap(find.widgetWithText(FilledButton, '完成'));
+    expect(find.widgetWithText(FilledButton, '完成'), findsNothing);
+    await tester.tap(find.text('名字'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField).last, '新助手');
+    await tester.tap(find.widgetWithText(FilledButton, '保存'));
     await tester.pumpAndSettle();
     await tester.scrollUntilVisible(
       find.textContaining('电脑不支持该保存操作'),

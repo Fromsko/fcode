@@ -42,8 +42,8 @@ String devicePathText(AppState state, String desktopId) {
       final path = state.pathOf(desktopId);
       final kind = switch (path.kind) {
         LinkPathKind.lan => state.tr('局域网直连', 'LAN'),
-        LinkPathKind.direct => state.tr('直连', 'Direct'),
-        LinkPathKind.relay => state.tr('经中继', 'Via relay'),
+        LinkPathKind.direct => state.tr('外网直连', 'Internet direct'),
+        LinkPathKind.relay => state.tr('中继', 'Relay'),
         LinkPathKind.none => null,
       };
       final rtt = path.rtt;
@@ -107,9 +107,16 @@ class _Dot extends StatelessWidget {
 
 /// 切换按钮的箭头：别的电脑上有等着用户的对话时挂个红点，不用点开面板才知道。
 /// 正看着的那台不算，它的数在底部对话标签上。
-class _SwitcherChevron extends StatelessWidget {
-  const _SwitcherChevron({required this.state});
+class SwitcherChevron extends StatelessWidget {
+  const SwitcherChevron({
+    super.key,
+    required this.state,
+    this.icon = 'chevron-down',
+    this.size = 16,
+  });
   final AppState state;
+  final String icon;
+  final double size;
 
   @override
   Widget build(BuildContext context) {
@@ -118,15 +125,19 @@ class _SwitcherChevron extends StatelessWidget {
       (desktop) =>
           desktop.id != selected && state.awaitingOn(desktop.id).waiting > 0,
     );
-    return Badge(
+    // 点挂在箭头右上角外沿，不压在线条上。
+    return Stack(
       key: const ValueKey('desktop-switcher-dot'),
-      isLabelVisible: othersWaiting,
-      smallSize: 7,
-      child: LucideIcon(
-        'chevron-down',
-        size: 16,
-        color: Theme.of(context).colorScheme.onSurfaceVariant,
-      ),
+      clipBehavior: Clip.none,
+      children: [
+        LucideIcon(
+          icon,
+          size: size,
+          color: Theme.of(context).colorScheme.onSurfaceVariant,
+        ),
+        if (othersWaiting)
+          const Positioned(top: -3, right: -3, child: Badge(smallSize: 7)),
+      ],
     );
   }
 }
@@ -185,7 +196,7 @@ class DesktopSwitcherTitle extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(width: MobileSpace.xs),
-                    _SwitcherChevron(state: state),
+                    SwitcherChevron(state: state),
                   ],
                 ),
                 if (desktopId != null && status != null)
@@ -304,7 +315,7 @@ class DesktopSwitcherButton extends StatelessWidget {
                         ?.laptop,
                   ),
                   const SizedBox(width: MobileSpace.xs),
-                  _SwitcherChevron(state: state),
+                  SwitcherChevron(state: state),
                 ],
               ),
             ),
@@ -695,13 +706,33 @@ class _DeviceRow extends StatelessWidget {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                Text(
-                                  name,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: theme.textTheme.bodyMedium!.copyWith(
-                                    fontWeight: FontWeight.w500,
-                                  ),
+                                Row(
+                                  children: [
+                                    Flexible(
+                                      child: Text(
+                                        name,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: theme.textTheme.bodyMedium!
+                                            .copyWith(
+                                              fontWeight: FontWeight.w500,
+                                            ),
+                                      ),
+                                    ),
+                                    // 一个点，和标题旁那个一样：不数几条，只说要你看。
+                                    if (waiting.waiting > 0)
+                                      Padding(
+                                        padding: const EdgeInsets.only(
+                                          left: MobileSpace.sm,
+                                        ),
+                                        child: Badge(
+                                          key: ValueKey('device-badge-$name'),
+                                          smallSize: 7,
+                                          backgroundColor:
+                                              theme.colorScheme.error,
+                                        ),
+                                      ),
+                                  ],
                                 ),
                                 const SizedBox(height: MobileSpace.xs),
                                 Text(
@@ -718,18 +749,6 @@ class _DeviceRow extends StatelessWidget {
                               ],
                             ),
                           ),
-                          if (waiting.waiting > 0)
-                            Padding(
-                              padding: const EdgeInsets.only(
-                                left: MobileSpace.xs,
-                              ),
-                              // 一个点，和标题旁那个一样：不数几条，只说要你看。
-                              child: Badge(
-                                key: ValueKey('device-badge-$name'),
-                                smallSize: 7,
-                                backgroundColor: theme.colorScheme.error,
-                              ),
-                            ),
                           if (selected)
                             LucideIcon(
                               'check',

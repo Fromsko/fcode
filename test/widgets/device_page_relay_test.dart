@@ -143,8 +143,8 @@ void main() {
 
   testWidgets('电脑尚未公布策略时说明使用内置列表', (tester) async {
     await _page(tester);
-    await reveal(tester, find.text('尚未收到电脑的中继策略，暂用内置中继'));
-    expect(find.text('尚未收到电脑的中继策略，暂用内置中继'), findsOneWidget);
+    await reveal(tester, find.text('尚未收到电脑的中继设置，暂用内置中继'));
+    expect(find.text('尚未收到电脑的中继设置，暂用内置中继'), findsOneWidget);
   });
 
   testWidgets('旧版保存的中继在电脑公布前不叫“跟随电脑”', (tester) async {
@@ -152,7 +152,7 @@ void main() {
     await reveal(tester, find.text('等待电脑公布'));
     expect(find.text('跟随电脑'), findsNothing);
     expect(find.text('等待电脑公布'), findsOneWidget);
-    expect(find.textContaining('旧版保存的提示'), findsOneWidget);
+    expect(find.textContaining('暂用之前保存的'), findsOneWidget);
     expect(find.textContaining('手动保存'), findsNothing);
     expect(find.textContaining('https://manual.example.test'), findsOneWidget);
   });
@@ -231,8 +231,8 @@ void main() {
         home: DevicePage(state: state, desktopId: id),
       ),
     );
-    await reveal(tester, find.textContaining('连接地址或中继策略未能保存'));
-    expect(find.textContaining('连接地址或中继策略未能保存'), findsOneWidget);
+    await reveal(tester, find.textContaining('地址或中继设置未能保存'));
+    expect(find.textContaining('地址或中继设置未能保存'), findsOneWidget);
     expect(find.text('跟随电脑'), findsOneWidget);
   });
 

@@ -22,9 +22,16 @@ List<int> changeStarts(List<ChangedLine> lines) => [
 /// 对齐的花费却随它的平方涨。
 const _maxEdits = 1000;
 
+/// [text]'s lines, a Windows line break's '\r' left out: a file read with
+/// CRLF here and LF before is not all changed.
+List<String> _linesOf(String text) => [
+  for (final line in text.split('\n'))
+    line.endsWith('\r') ? line.substring(0, line.length - 1) : line,
+];
+
 List<ChangedLine> lineDiff(String before, String after) {
-  final a = before.isEmpty ? <String>[] : before.split('\n');
-  final b = after.isEmpty ? <String>[] : after.split('\n');
+  final a = before.isEmpty ? <String>[] : _linesOf(before);
+  final b = after.isEmpty ? <String>[] : _linesOf(after);
   var prefix = 0;
   while (prefix < a.length && prefix < b.length && a[prefix] == b[prefix]) {
     prefix++;

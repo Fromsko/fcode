@@ -27,15 +27,20 @@ class DesktopNotifications {
 
   /// 对话从 [before] 变成 [after] 该不该提醒：`true` 是等你处理，`false` 是
   /// 一轮做完，`null` 不提醒。电脑合并推送或手机断线时可能看不到「运行中」，
-  /// 所以新变成未读也算做完。第一次见到的对话不提醒。
-  static bool? turnNotice(SessionSummary? before, SessionSummary after) {
+  /// 所以新变成未读也算做完。第一次见到的对话不提醒。[seen] 是手机已经看过
+  /// 这段内容（断线期间打开过）：这时电脑仍报未读，也不补发提醒。
+  static bool? turnNotice(
+    SessionSummary? before,
+    SessionSummary after, {
+    bool seen = false,
+  }) {
     if (before == null) return null;
     if (after.status == LinkSessionStatus.needsInput) {
       return before.status == LinkSessionStatus.needsInput ? null : true;
     }
     if (after.status != LinkSessionStatus.idle) return null;
     return before.status == LinkSessionStatus.running ||
-            (after.unread && !before.unread)
+            (after.unread && !before.unread && !seen)
         ? false
         : null;
   }

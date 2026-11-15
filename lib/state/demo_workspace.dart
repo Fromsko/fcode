@@ -36,7 +36,7 @@ class DemoWorkspace {
       'bots': [
         {
           'id': 'assistant',
-          'name': '小宝',
+          'name': '小Y',
           'signature': '你的电脑助理',
           'identity': '帮助你照看电脑上的项目。',
           'assistant': true,

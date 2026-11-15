@@ -30,6 +30,9 @@ void main() {
     );
     expect(find.text('干活方式'), findsOneWidget);
     expect(find.text('只聊天'), findsOneWidget);
+    // 新聊天设置增加了表单高度；先滚动到实际可点击位置，不放大测试视口。
+    await tester.ensureVisible(find.byKey(const ValueKey('bot-chat-only')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('bot-chat-only')));
     await tester.pump();
     expect(

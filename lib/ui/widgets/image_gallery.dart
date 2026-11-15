@@ -62,9 +62,6 @@ Future<void> showImageGallery(
   int initialIndex = 0,
   GallerySaver? saver,
 }) {
-  // 先放掉输入焦点：否则关闭路由时焦点会回到输入框并再次弹出键盘。
-  // 只是失焦，控制器里的草稿与光标不变；用户再点输入框即可正常聚焦。
-  FocusManager.instance.primaryFocus?.unfocus();
   final selected = ImageGalleryScope.maybeOf(context)
       ?.resolve((images: images, index: initialIndex));
   return showDialog<void>(

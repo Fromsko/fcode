@@ -10,6 +10,7 @@ void main() {
     addTearDown(focus.dispose);
     await tester.pumpWidget(
       MaterialApp(
+        navigatorObservers: [ReleaseInputOnCover()],
         home: Builder(
           builder: (context) => Scaffold(
             body: Column(

@@ -19,7 +19,7 @@ void main() {
     expect(find.text('在电脑上打开 BaoCode'), findsOneWidget);
     expect(find.text('进入 设置 → 手机，点击「显示二维码」'), findsOneWidget);
     expect(find.text('用手机扫描电脑上显示的二维码'), findsOneWidget);
-    expect(find.text('让二维码填满方框；识别不到时离远一点，或双指放大'), findsOneWidget);
+    expect(find.text('将二维码置于框内；识别不了可稍微拉远或双指放大'), findsOneWidget);
     expect(find.byType(TextField), findsNothing);
 
     await tester.ensureVisible(find.text('改为粘贴配对链接'));
@@ -29,9 +29,9 @@ void main() {
     expect(find.byType(TextField), findsOneWidget);
     expect(find.text('改为扫描二维码'), findsOneWidget);
 
-    await tester.ensureVisible(find.textContaining('二维码里有电脑的公钥和地址'));
+    await tester.ensureVisible(find.textContaining('二维码包含电脑的公钥和地址'));
     await tester.pump();
-    expect(find.textContaining('二维码里有电脑的公钥和地址'), findsOneWidget);
+    expect(find.textContaining('二维码包含电脑的公钥和地址'), findsOneWidget);
   });
 
   testWidgets('常规手机首屏可见粘贴入口和附近电脑，说明不抢正文层级', (tester) async {

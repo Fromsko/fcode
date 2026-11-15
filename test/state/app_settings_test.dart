@@ -5,12 +5,18 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('后台连接默认关闭，用户选择可以保存和读取', () {
-    expect(AppSettings.fromJson({}).keepBackgroundConnection, isFalse);
-    final original = AppSettings()..keepBackgroundConnection = true;
+  test('后台连接新装默认开着；以前存过的关闭保持关闭', () {
+    expect(AppSettings.fromJson({}).keepBackgroundConnection, isTrue);
+    expect(AppSettings().keepBackgroundConnection, isTrue);
+    expect(
+      AppSettings.fromJson({'keepBackgroundConnection': false})
+          .keepBackgroundConnection,
+      isFalse,
+    );
+    final original = AppSettings()..keepBackgroundConnection = false;
     expect(
       AppSettings.fromJson(original.toJson()).keepBackgroundConnection,
-      isTrue,
+      isFalse,
     );
   });
 
@@ -46,10 +52,11 @@ void main() {
     expect(settings.codeFontSize, 10);
   });
 
-  test('放到首页的对话与置顶的 Bot 按电脑保存并能读回', () {
+  test('放到首页的对话、置顶的 Bot 和群聊按电脑保存并能读回', () {
     final settings = AppSettings()
       ..homeSessions.add(('desk', 'session'))
-      ..pinnedBots.add(('desk', 'bot'));
+      ..pinnedBots.add(('desk', 'bot'))
+      ..pinnedGroups.add(('desk', 'group'));
     final back = AppSettings.fromJson(
       Map<String, Object?>.from(
         jsonDecode(jsonEncode(settings.toJson())) as Map,
@@ -57,8 +64,10 @@ void main() {
     );
     expect(back.homeSessions, {('desk', 'session')});
     expect(back.pinnedBots, {('desk', 'bot')});
+    expect(back.pinnedGroups, {('desk', 'group')});
     expect(AppSettings.fromJson({}).homeSessions, isEmpty);
     expect(AppSettings.fromJson({}).pinnedBots, isEmpty);
+    expect(AppSettings.fromJson({}).pinnedGroups, isEmpty);
   });
 
   test('通知分三类保存；旧的总开关关闭时三类都关', () {

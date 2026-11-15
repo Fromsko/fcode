@@ -8,6 +8,21 @@ import 'package:baocode_mobile/state/conversation_input.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('独立已确认文件与普通引用通过唯一出口组合且草稿不保存字节', () {
+    final file = DraftFile(name: '中文 文件.pdf', size: 3,
+      path: '/电脑/中文 文件.pdf', status: DraftFileStatus.ready);
+    final input = InputDraft(text: '请读 @src/a.dart @/tmp/a-other',
+      mentions: {'src/a.dart', '/tmp/a'}, files: [file]);
+    expect(assembleInput(input).text,
+      '请读 @src/a.dart @/tmp/a-other\n\n@"/电脑/中文 文件.pdf"');
+    expect(assembleInput(input).mentions, ['src/a.dart', '/电脑/中文 文件.pdf']);
+    final stored = input.toStored();
+    final restored = InputDraft.fromStored(stored);
+    expect(restored.files.single.path, file.path);
+    expect(restored.files.single.size, 3);
+    expect(restored.text, input.text);
+  });
+
   test('编辑定位只认消息本身：换会话或内容变了拒绝，修订号变化不算', () {
     final buffer = SessionBuffer('a', 's')
       ..items.add({'t': 'user', 'text': 'old'});

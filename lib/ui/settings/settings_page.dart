@@ -13,6 +13,7 @@ import '../../theme/app_theme.dart';
 import '../devices/device_menu.dart';
 import '../devices/devices_page.dart';
 import '../widgets/dropdown_panel.dart';
+import '../widgets/image_gallery.dart';
 import '../widgets/lucide_icon.dart';
 import '../widgets/mobile_widgets.dart';
 import '../widgets/scale_slider.dart';
@@ -176,18 +177,10 @@ class SettingsPage extends StatelessWidget {
               SettingsRow(
                 state.tr('关于 YCode', 'About YCode'),
                 icon: 'info',
-                onTap: () => openPage<void>(
-                  context,
-                  AboutPage(state: state, appVersion: appVersion),
-                ),
-              ),
-              SettingsRow(
-                state.tr('当前版本', 'Current version'),
-                icon: 'tag',
                 value: appVersion,
                 onTap: () => openPage<void>(
                   context,
-                  VersionPage(state: state, appVersion: appVersion),
+                  AboutPage(state: state, appVersion: appVersion),
                 ),
               ),
             ],
@@ -382,8 +375,8 @@ class _MyProfilePageState extends State<MyProfilePage> {
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
             child: Text(
               state.tr(
-                '你的 Bot 能看到这些和你的头像，知道你是谁。',
-                'Your bots can see this and your picture, so they know who you are.',
+                'Bot 会看到这些信息和头像，用来认识你。',
+                'Your bots see this and your picture, so they know who you are.',
               ),
               style: MobileTheme.hintStyleOf(context),
             ),
@@ -447,7 +440,7 @@ class ThemePage extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
             child: Text(
               state.tr(
-                '用于按钮、链接和选中状态；浅色与深色各有适配的色调。',
+                '用于按钮、链接和选中状态，浅色和深色模式分别适配。',
                 'Used for buttons, links and what is selected, toned for light and dark.',
               ),
               style: MobileTheme.hintStyleOf(context),
@@ -510,7 +503,7 @@ class TextSizePage extends StatelessWidget {
           const SizedBox(height: 12),
           Text(
             state.tr(
-              '你好，这是对话的文字大小。拖动下面的滑块试试。',
+              '这是对话文字的大小，拖动下方滑块调整。',
               'This is how conversation text appears. Drag the sliders below.',
             ),
             style: MobileTheme.messageStyleOf(context),
@@ -558,8 +551,8 @@ class TextSizePage extends StatelessWidget {
           const SizedBox(height: 12),
           Text(
             state.tr(
-              '消息阅读只调整消息与思考正文，不改变菜单和输入框。代码字号独立，所有界面仍遵循系统字体设置。',
-              'Message reading changes messages and expanded reasoning, not menus or the composer. Code size is separate. System text settings still apply everywhere.',
+              '只调整消息和思考内容的字号，不影响菜单和输入框。代码字号单独设置，系统字体大小仍然生效。',
+              'Changes messages and reasoning, not menus or the composer. Code size is set separately. System text size still applies.',
             ),
             style: Theme.of(context).textTheme.bodySmall,
           ),
@@ -697,12 +690,12 @@ class _NotificationsPageState extends State<NotificationsPage>
               SwitchListTile(
                 key: const ValueKey('background-connection'),
                 title: Text(
-                  state.tr('后台保持电脑连接', 'Keep desktop connection in background'),
+                  state.tr('后台保持连接', 'Stay connected in background'),
                 ),
                 subtitle: Text(
                   state.tr(
-                    '开启后显示常驻通知并增加耗电；系统仍可能限制后台运行。',
-                    'Uses a persistent notification and more battery. The system may still limit background activity.',
+                    '锁屏后继续接收提醒，通知栏显示对话状态。会增加耗电。',
+                    'Keeps alerts coming when locked and shows conversation status in the notification. Uses more battery.',
                   ),
                 ),
                 value: state.demo
@@ -731,8 +724,8 @@ class _NotificationsPageState extends State<NotificationsPage>
                   title: Text(state.tr('允许后台运行', 'Allow background activity')),
                   subtitle: Text(
                     state.tr(
-                      '系统仍在为 YCode 省电，锁屏久了可能断开。部分手机还要在应用设置里允许自启动和后台运行。',
-                      'The system still saves battery for YCode and may disconnect it after a while locked. Some phones also need auto-start and background activity allowed in app settings.',
+                      '系统仍在限制 YCode 后台运行，锁屏后可能断开。部分手机还需在应用设置中允许自启动。',
+                      'The system still limits YCode in the background and may disconnect it when locked. Some phones also need auto-start allowed in app settings.',
                     ),
                   ),
                   trailing: TextButton(
@@ -752,15 +745,15 @@ class _NotificationsPageState extends State<NotificationsPage>
               for (final (key, zh, en, on, set) in [
                 (
                   'needs-input',
-                  '智能体需要我处理时',
-                  'When an agent needs me',
+                  '需要我处理时',
+                  'When I need to act',
                   state.settings.notifyNeedsInput,
                   (bool value) => state.settings.notifyNeedsInput = value,
                 ),
                 (
                   'done',
-                  '智能体完成时',
-                  'When an agent finishes',
+                  '对话完成时',
+                  'When a conversation finishes',
                   state.settings.notifyDone,
                   (bool value) => state.settings.notifyDone = value,
                 ),
@@ -802,8 +795,8 @@ class _NotificationsPageState extends State<NotificationsPage>
                     ),
                     title: Text(
                       state.tr(
-                        '系统已关闭 BaoCode 的通知',
-                        'The system blocks BaoCode notifications',
+                        '系统已关闭 YCode 的通知',
+                        'The system blocks YCode notifications',
                       ),
                     ),
                     trailing: TextButton(
@@ -820,8 +813,8 @@ class _NotificationsPageState extends State<NotificationsPage>
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
             child: Text(
               state.tr(
-                '收到电脑更新后由手机提醒，不依赖推送服务器。可在系统应用设置中允许后台活动；进程被结束后需重新打开 App，并重新开启后台模式；返回时会核对并恢复内容。',
-                'The phone notifies after receiving desktop updates, without a push server. Allow background activity in system app settings if needed. Reopen the app and enable background mode again after its process is ended; returning checks and restores content.',
+                '提醒由手机直接接收，不经过推送服务器。应用被系统结束后，需重新打开才能继续接收。',
+                'Alerts come straight to the phone, with no push server. If the system ends the app, open it again to keep receiving them.',
               ),
               style: MobileTheme.hintStyleOf(context),
             ),
@@ -942,8 +935,8 @@ class SecurityPage extends StatelessWidget {
                 'route',
                 state.tr('途经的网络无法读取', 'Networks in between cannot read it'),
                 state.tr(
-                  '消息、代码和文件在发出前就已加密，无论经过局域网、公网，还是以后的中转服务。',
-                  'Messages, code and files are encrypted before they leave, over the LAN, the internet, or a relay later on.',
+                  '消息、代码和文件在发出前加密，经局域网、公网或中继传输都一样。',
+                  'Messages, code and files are encrypted before they leave, whether over the LAN, the internet or a relay.',
                 ),
               ),
               _point(
@@ -951,7 +944,7 @@ class SecurityPage extends StatelessWidget {
                 'shield-check',
                 state.tr('配对时当面核对', 'Checked face to face when pairing'),
                 state.tr(
-                  '配对时核对安全码，确保中间没有人截获。',
+                  '配对时核对安全码，防止被中间人截获。',
                   'Comparing safety codes when pairing makes sure nobody is in between.',
                 ),
               ),
@@ -993,7 +986,7 @@ class SecurityPage extends StatelessWidget {
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
                 child: Text(
                   state.tr(
-                    '已配对的电脑上会显示这台手机的这个指纹。',
+                    '已配对的电脑上会显示这台手机的指纹。',
                     'Paired desktops show this fingerprint for this phone.',
                   ),
                   style: MobileTheme.hintStyleOf(context),
@@ -1108,7 +1101,7 @@ class _ExtensionsPageState extends State<ExtensionsPage> {
                 desktopId == null
                     ? state.tr('还没有配对电脑。', 'No desktop paired yet.')
                     : state.tr(
-                        '电脑未连接，连上后显示它的扩展。',
+                        '电脑未连接，连接后显示扩展。',
                         'The desktop is not connected; its extensions show once it is.',
                       ),
               )
@@ -1443,7 +1436,6 @@ class _UpdateCheckRowState extends State<UpdateCheckRow> {
   @override
   Widget build(BuildContext context) => SettingsRow(
     widget.state.tr('检查更新', 'Check for updates'),
-    icon: 'refresh-cw',
     value: _checking
         ? null
         : widget.state.tr('看看有没有新版本', 'Look for a new version'),
@@ -1452,56 +1444,7 @@ class _UpdateCheckRowState extends State<UpdateCheckRow> {
   );
 }
 
-/// 版本更新页：图标、版本名，一个检查更新的按钮。
-class VersionPage extends StatelessWidget {
-  const VersionPage({super.key, required this.state, required this.appVersion});
-  final AppState state;
-  final String appVersion;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Scaffold(
-      appBar: AppBar(title: Text(state.tr('版本更新', 'Update'))),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(
-          MobileSpace.lg,
-          MobileSpace.xl,
-          MobileSpace.lg,
-          MobileSpace.xl,
-        ),
-        children: [
-          Center(
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(22),
-              child: SvgPicture.asset(
-                'assets/icons/ycode.svg',
-                width: 96,
-                height: 96,
-              ),
-            ),
-          ),
-          const SizedBox(height: MobileSpace.xl),
-          Text(
-            'YCode $appVersion',
-            textAlign: TextAlign.center,
-            style: theme.textTheme.titleLarge?.copyWith(
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: MobileSpace.lg),
-          GroupCard(
-            children: [
-              UpdateCheckRow(state: state, currentVersion: appVersion),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// 关于：图标、版本和一句话说明，下面是官网、更新日志、开源许可。
+/// 关于：图标、版本和一句话说明，下面是检查更新、更新日志、官网、开源许可。
 class AboutPage extends StatelessWidget {
   const AboutPage({super.key, required this.state, required this.appVersion});
   final AppState state;
@@ -1549,24 +1492,27 @@ class AboutPage extends StatelessWidget {
           const SizedBox(height: MobileSpace.lg),
           Text(
             state.tr(
-              '把电脑上的 Claude Code 装进口袋：随时查看对话进展、回答提问、发起新任务，全程端到端加密。',
-              'Claude Code from your desktop, in your pocket: follow work as it happens, answer questions, start new tasks, all end-to-end encrypted.',
+              '把电脑上的 Claude Code 带到手机：看进展、答提问、发任务，端到端加密。',
+              'Claude Code from your desktop, on your phone: follow progress, answer questions, start tasks. End-to-end encrypted.',
             ),
             textAlign: TextAlign.center,
             style: theme.textTheme.bodyMedium,
           ),
           const SizedBox(height: MobileSpace.xl),
+          _DonateCard(state: state),
+          const SizedBox(height: MobileSpace.xl),
           GroupCard(
             children: [
-              SettingsRow(
-                state.tr('官网', 'Website'),
-                value: Uri.parse(_site).host,
-                onTap: () => confirmExternalLink(context, state, _site),
-              ),
+              UpdateCheckRow(state: state, currentVersion: appVersion),
               SettingsRow(
                 state.tr('更新日志', 'Changelog'),
                 onTap: () =>
                     openPage<void>(context, ChangelogPage(state: state)),
+              ),
+              SettingsRow(
+                state.tr('官网', 'Website'),
+                value: Uri.parse(_site).host,
+                onTap: () => confirmExternalLink(context, state, _site),
               ),
               SettingsRow(
                 state.tr('开源许可', 'Open-source licenses'),
@@ -1586,6 +1532,70 @@ class AboutPage extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// 微信、支付宝收款码并排，点开全屏，可以存到相册再去扫。
+class _DonateCard extends StatelessWidget {
+  const _DonateCard({required this.state});
+  final AppState state;
+
+  static const _codes = [
+    ('assets/donate/wechat.webp', '微信', 'WeChat', Color(0xFF07C160)),
+    ('assets/donate/alipay.webp', '支付宝', 'Alipay', Color(0xFF1677FF)),
+  ];
+
+  Future<void> _open(BuildContext context, int index) async {
+    final images = [
+      for (final (path, zh, en, _) in _codes)
+        GalleryImage(
+          (await rootBundle.load(path)).buffer.asUint8List(),
+          name: state.tr(zh, en),
+        ),
+    ];
+    if (!context.mounted) return;
+    await showImageGallery(context, images, initialIndex: index);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final hint = MobileTheme.hintStyleOf(context);
+    return Column(
+      children: [
+        Text(state.tr('请我喝杯咖啡', 'Buy me a coffee'), style: hint),
+        const SizedBox(height: MobileSpace.md),
+        Row(
+          children: [
+            for (final (index, (path, zh, en, color)) in _codes.indexed) ...[
+              if (index > 0) const SizedBox(width: MobileSpace.md),
+              Expanded(
+                child: Column(
+                  children: [
+                    GestureDetector(
+                      key: ValueKey('donate-$en'),
+                      onTap: () => _open(context, index),
+                      child: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: color,
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: Image.asset(path),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: MobileSpace.xs),
+                    Text(state.tr(zh, en), style: hint),
+                  ],
+                ),
+              ),
+            ],
+          ],
+        ),
+      ],
     );
   }
 }

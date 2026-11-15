@@ -1,3 +1,4 @@
+import 'package:baocode_mobile/ui/widgets/mobile_widgets.dart';
 import 'package:baocode_mobile/chat/message_view.dart';
 import 'package:baocode_mobile/ui/tasks/chat_page.dart';
 import 'package:baocode_mobile/ui/widgets/image_gallery.dart';
@@ -23,6 +24,7 @@ void main() {
     ]);
     await tester.pumpWidget(
       MaterialApp(
+        navigatorObservers: [ReleaseInputOnCover()],
         home: ChatPage(
           state: state,
           desktopId: 'desktop',

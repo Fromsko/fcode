@@ -217,8 +217,8 @@ void main() {
           .value,
       isFalse,
     );
-    expect(find.text('智能体需要我处理时'), findsOneWidget);
-    expect(find.text('智能体完成时'), findsOneWidget);
+    expect(find.text('需要我处理时'), findsOneWidget);
+    expect(find.text('对话完成时'), findsOneWidget);
     expect(find.text('Bot 发来消息时'), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('notify-done')));
     await tester.pumpAndSettle();

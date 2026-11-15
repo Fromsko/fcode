@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:bao_link/bao_link.dart';
 import 'package:baocode_mobile/state/app_state.dart';
 import 'package:baocode_mobile/link/link_store.dart';
@@ -85,6 +87,14 @@ class _State extends AppState {
       : DesktopLinkStatus.offline;
   @override
   void retryConnection(String desktopId) {}
+  final refreshed = <String>[];
+  Completer<void>? refreshing;
+  @override
+  Future<void> refreshDesktop(String desktopId) async {
+    refreshed.add(desktopId);
+    await refreshing?.future;
+  }
+
   @override
   Future<Object?> request(
     String desktopId,
@@ -251,10 +261,10 @@ void main() {
         ),
       ),
     );
-    expect(find.text('在线 · 经中继 · 399 毫秒'), findsOneWidget);
+    expect(find.text('在线 · 中继 · 399 毫秒'), findsOneWidget);
     await tester.tap(find.byTooltip('切换电脑'));
     await tester.pumpAndSettle();
-    expect(find.text('在线 · 经中继 · 399 毫秒'), findsNWidgets(2));
+    expect(find.text('在线 · 中继 · 399 毫秒'), findsNWidgets(2));
     expect(find.text('离线 · 正在重连'), findsOneWidget);
     expect(find.text('配对新电脑'), findsOneWidget);
     await tester.tap(find.text('离线设备'));
@@ -285,16 +295,15 @@ void main() {
     expect(state.retries, ['在线']);
   });
 
-  testWidgets('项目和 Bot 按最近时间混排，没有时间的在最后', (tester) async {
+  testWidgets('对话页只列项目与首页对话，不再列 Bot', (tester) async {
     final state = _State()..withBot = true;
     addTearDown(state.dispose);
     await tester.pumpWidget(MaterialApp(home: ChatsTab(state: state)));
     double top(String text) => tester.getTopLeft(find.text(text)).dy;
-    expect(top('小宝'), lessThan(top('项目甲（2）')));
     expect(top('项目甲（2）'), lessThan(top('空项目')));
-    // 自己加的 Bot 不是助理，也一样列在首页，按时间排。
-    expect(top('小宝'), lessThan(top('审稿 Bot')));
-    expect(top('审稿 Bot'), lessThan(top('空项目')));
+    // Bot 都在 Bot 页。
+    expect(find.text('小宝'), findsNothing);
+    expect(find.text('审稿 Bot'), findsNothing);
   });
 
   testWidgets('只置顶的对话留在项目里；放到首页后与项目同层，置顶的排在最顶', (tester) async {
@@ -416,7 +425,7 @@ void main() {
     expect(page.projectId, 'e');
     expect(page.sessionId, 'draft-e');
     // 换项目是替换当前页，返回直接回首页。
-    await tester.pageBack();
+    await tester.tap(find.byTooltip('返回'));
     await tester.pumpAndSettle();
     expect(find.byType(ChatPage), findsNothing);
     await tester.pumpWidget(const SizedBox.shrink());
@@ -464,4 +473,48 @@ void main() {
     expect(find.byType(ProjectChatsPage), findsNothing);
     expect(find.byKey(const ValueKey('session-在线-会话乙')), findsNothing);
   });
+
+  testWidgets('对话列表下拉过阈值刷新一次，刷新中灰点起伏，完成后收起', (tester) async {
+    final state = _State()..refreshing = Completer<void>();
+    addTearDown(state.dispose);
+    await tester.pumpWidget(MaterialApp(home: ChatsTab(state: state)));
+    await tester.pumpAndSettle();
+    final dots = find.byKey(const ValueKey('pull-refresh-dots'));
+    expect(tester.getSize(dots).height, 0);
+
+    await tester.drag(find.text('项目甲（2）'), const Offset(0, 120));
+    await tester.pump();
+    expect(state.refreshed, ['在线']);
+    // 刷新没结束，灰点留在上面并持续动。
+    final first = _dotOpacity(tester);
+    await tester.pump(const Duration(milliseconds: 160));
+    expect(_dotOpacity(tester), isNot(first));
+    expect(tester.getSize(dots).height, greaterThan(0));
+
+    state.refreshing!.complete();
+    await tester.pumpAndSettle();
+    expect(tester.getSize(dots).height, 0);
+    expect(find.text('项目甲（2）'), findsOneWidget);
+  });
+
+  testWidgets('轻轻下拉距离不够，不刷新', (tester) async {
+    final state = _State();
+    addTearDown(state.dispose);
+    await tester.pumpWidget(MaterialApp(home: ChatsTab(state: state)));
+    await tester.pumpAndSettle();
+    await tester.drag(find.text('项目甲（2）'), const Offset(0, 30));
+    await tester.pumpAndSettle();
+    expect(state.refreshed, isEmpty);
+  });
 }
+
+double _dotOpacity(WidgetTester tester) => tester
+    .widget<Opacity>(
+      find
+          .descendant(
+            of: find.byKey(const ValueKey('pull-refresh-dots')),
+            matching: find.byType(Opacity),
+          )
+          .first,
+    )
+    .opacity;

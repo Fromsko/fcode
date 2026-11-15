@@ -46,6 +46,16 @@ class BotModeUnconfirmed implements Exception {
   );
 }
 
+class BotWritesFirstUnconfirmed extends UserFacingError {
+  BotWritesFirstUnconfirmed()
+    : super(
+        AppState.phrase(
+          '电脑未确认主动联系开关，请核对实际资料；旧版电脑可能不支持。',
+          'The desktop did not confirm the contact setting. Check the actual profile; older desktops may not support it.',
+        ),
+      );
+}
+
 /// 创建结果不确定时保留状态，不能把第二次保存误当作另一次创建。
 class BotProfileSaver {
   BotProfileSaver({
@@ -72,6 +82,7 @@ class BotProfileSaver {
   Future<LinkBot> save(
     Map<String, Object?> fields, {
     required bool chatOnly,
+    bool? writesFirst,
   }) async {
     if (_busy || creationUnconfirmed) {
       throw StateError(
@@ -82,8 +93,13 @@ class BotProfileSaver {
     final creating = botId == null;
     final params = {...fields}..remove('bot');
     params.remove('chatOnly');
+    params.remove('writesFirst');
+    final nextWritesFirst = writesFirst ?? saved?.writesFirst ?? true;
     if (!creating) params['bot'] = botId;
     if (creating || saved!.chatOnly != chatOnly) params['chatOnly'] = chatOnly;
+    if (creating || saved!.writesFirst != nextWritesFirst) {
+      params['writesFirst'] = nextWritesFirst;
+    }
     try {
       final response = await request(desktopId, LinkMethods.saveBot, params);
       if (response is! Map || response['bot'] is! Map) {
@@ -103,6 +119,10 @@ class BotProfileSaver {
       creationUnconfirmed = false;
       if (params.containsKey('chatOnly') && actual.chatOnly != chatOnly) {
         throw const BotModeUnconfirmed();
+      }
+      if (params.containsKey('writesFirst') &&
+          actual.writesFirst != nextWritesFirst) {
+        throw BotWritesFirstUnconfirmed();
       }
       return actual;
     } on LinkRemoteException {

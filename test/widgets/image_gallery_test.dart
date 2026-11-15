@@ -1,3 +1,4 @@
+import 'package:baocode_mobile/ui/widgets/mobile_widgets.dart';
 import 'package:baocode_mobile/chat/chat_models.dart';
 import 'package:baocode_mobile/chat/message_view.dart';
 import 'package:baocode_mobile/chat/widgets/step_images.dart';
@@ -15,7 +16,8 @@ List<GalleryImage> _images(int count) => [
     GalleryImage(testImageBytes(i), name: 'pic-$i.png'),
 ];
 
-Widget _app(Widget home) => MaterialApp(home: home);
+Widget _app(Widget home) =>
+    MaterialApp(navigatorObservers: [ReleaseInputOnCover()], home: home);
 
 /// 打开画廊的按钮，用来验证关闭后回到原页面。
 Widget _opener(List<GalleryImage> images, int index, {GallerySaver? saver}) =>

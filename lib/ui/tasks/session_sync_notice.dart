@@ -6,15 +6,20 @@ import 'package:flutter/material.dart';
 import '../../state/app_state.dart';
 import '../../theme/app_theme.dart';
 
-/// 同步超过 300ms 才算“同步中”，快同步不闪；由标题下的状态行显示，不占独立一行。
+/// 同步超过门槛才算“同步中”，快同步不闪；由标题下的状态行显示，不占独立一行。
+/// 对话里已有内容时是静默重开，门槛放长，不让回前台变成一闪。
 class SessionSyncGate extends StatefulWidget {
   const SessionSyncGate({
     super.key,
     required this.online,
     required this.loading,
+    this.hasContent = false,
     required this.builder,
   });
   final bool online, loading;
+
+  /// 已经有消息可看：重新打开只是核对，不必急着说“同步中”。
+  final bool hasContent;
   final Widget Function(BuildContext context, bool syncing) builder;
 
   @override
@@ -25,10 +30,14 @@ class _SessionSyncGateState extends State<SessionSyncGate> {
   Timer? _delay;
   bool _show = false;
 
+  Duration get _threshold => widget.hasContent
+      ? const Duration(milliseconds: 1500)
+      : const Duration(milliseconds: 300);
+
   void _wait() {
     _delay?.cancel();
     if (!widget.online || !widget.loading) return;
-    _delay = Timer(const Duration(milliseconds: 300), () {
+    _delay = Timer(_threshold, () {
       if (!mounted || !widget.online || !widget.loading) return;
       setState(() => _show = true);
     });
@@ -46,7 +55,9 @@ class _SessionSyncGateState extends State<SessionSyncGate> {
     if (!widget.online || !widget.loading) {
       _delay?.cancel();
       _show = false;
-    } else if (!oldWidget.online || !oldWidget.loading) {
+    } else if (!oldWidget.online ||
+        !oldWidget.loading ||
+        oldWidget.hasContent != widget.hasContent) {
       _wait();
     }
   }

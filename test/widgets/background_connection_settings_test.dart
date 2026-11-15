@@ -20,7 +20,9 @@ void main() {
   const platform = MethodChannel('local.baocode.mobile/platform');
 
   setUp(() {
-    state = ChatTestState(zh: true);
+    // 这里测的是用户从「关」拨到「开」；新装默认开着另有单测。
+    state = ChatTestState(zh: true)
+      ..settings.keepBackgroundConnection = false;
     permission = true;
     running = false;
     reject = false;
@@ -57,7 +59,7 @@ void main() {
     messenger.setMockMethodCallHandler(BackgroundConnection.channel, null);
   });
 
-  testWidgets('后台连接默认关闭，原生确认后开启，关闭后实际停止', (tester) async {
+  testWidgets('后台连接由用户开启，原生确认后运行，关闭后实际停止', (tester) async {
     await tester.pumpWidget(MaterialApp(home: NotificationsPage(state: state)));
     await tester.pumpAndSettle();
     final toggle = find.byKey(const ValueKey('background-connection'));

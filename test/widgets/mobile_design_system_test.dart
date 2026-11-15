@@ -6,34 +6,40 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  testWidgets('列表行：模型、标签、时间靠右排满，标题拿剩下的', (tester) async {
+  testWidgets('列表行：标签紧跟标题，模型、时间靠右排满', (tester) async {
     tester.view.physicalSize = const Size(360, 800);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
-    await tester.pumpWidget(
+    Future<void> pump(String title) => tester.pumpWidget(
       MaterialApp(
         theme: MobileTheme.build(Brightness.light),
-        home: const Scaffold(
+        home: Scaffold(
           body: ListRow(
-            leading: SizedBox(),
-            title: '对话图片复制失败逻辑分析和一个很长的标题',
-            aside: Text('Opus 5.5'),
+            leading: const SizedBox(),
+            title: title,
+            aside: const Text('Opus 5.5'),
             note: '首页',
             time: '20:51',
           ),
         ),
       ),
     );
+    await pump('对话图片复制失败逻辑分析和一个很长的标题');
     final title = tester.getRect(find.textContaining('对话图片'));
     final model = tester.getRect(find.text('Opus 5.5'));
     final tag = tester.getRect(find.text('首页'));
     final time = tester.getRect(find.text('20:51'));
-    expect(title.right, lessThanOrEqualTo(model.left));
-    expect(model.right, lessThan(tag.left));
-    expect(tag.right, lessThan(time.left));
+    expect(title.right, lessThan(tag.left));
+    expect(tag.right, lessThanOrEqualTo(model.left));
+    expect(model.right, lessThan(time.left));
     // 右边那组完整显示，没被截断。
     expect(tester.getSize(find.text('Opus 5.5')).width, greaterThan(40));
+    expect(tester.takeException(), isNull);
+
+    await pump('小Y');
+    final short = tester.getRect(find.text('小Y'));
+    expect(tester.getRect(find.text('首页')).left - short.right, lessThan(16));
     expect(tester.takeException(), isNull);
   });
 

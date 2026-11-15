@@ -178,7 +178,6 @@ void main() {
     Future<Finder> open(
       WidgetTester tester, {
       required AlignmentGeometry alignment,
-      ValueChanged<UserMessageItem>? onEdit,
     }) async {
       final state = AppState(store: MemoryLinkStore());
       addTearDown(state.dispose);
@@ -193,7 +192,6 @@ void main() {
                 desktopId: '电脑',
                 bot: const BotRef('电脑', LinkBot(id: '宝', name: '小宝')),
                 item: const UserMessageItem(text: '你好'),
-                onEdit: onEdit,
               ),
             ),
           ),
@@ -222,24 +220,13 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('点编辑重发先关菜单再回调，点外面只关闭', (tester) async {
-      UserMessageItem? edited;
-      await open(
-        tester,
-        alignment: Alignment.center,
-        onEdit: (item) => edited = item,
-      );
+    testWidgets('不给编辑重发，点外面只关闭', (tester) async {
+      await open(tester, alignment: Alignment.center);
+      expect(find.text('复制'), findsOneWidget);
+      expect(find.text('编辑重发'), findsNothing);
       await tester.tapAt(const Offset(4, 4));
       await tester.pumpAndSettle();
-      expect(find.text('编辑重发'), findsNothing);
-      expect(edited, isNull);
-
-      await tester.longPress(find.byKey(const ValueKey('bot-user-bubble')));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('编辑重发'));
-      await tester.pumpAndSettle();
-      expect(find.text('编辑重发'), findsNothing);
-      expect(edited?.text, '你好');
+      expect(find.text('复制'), findsNothing);
     });
   });
   testWidgets('Bot说话分成独立气泡，卡片旁白保留且不显示标签', (tester) async {
@@ -298,7 +285,10 @@ void main() {
       left,
     );
     expect(tester.getTopLeft(find.text('轻声说')).dx, left);
-    expect(find.textContaining('[运行中]', findRichText: true), findsOneWidget);
+    expect(
+      find.textContaining('运行中 · 项目甲', findRichText: true),
+      findsOneWidget,
+    );
     expect(find.textContaining('项目甲', findRichText: true), findsNWidgets(2));
     expect(find.text('修复电脑图标'), findsOneWidget);
     expect(find.text('新对话'), findsOneWidget);

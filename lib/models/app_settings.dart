@@ -26,7 +26,9 @@ class AppSettings {
 
   /// The system was asked once to let the app notify; not again unasked.
   bool notificationsAsked = false;
-  bool keepBackgroundConnection = false;
+
+  /// 新装默认开着；以前存过「关」的保持关。
+  bool keepBackgroundConnection = true;
   bool haptics = true;
 
   /// Keeps an agent's changes as each of its turns ends, for every
@@ -41,6 +43,13 @@ class AppSettings {
   /// The bots pinned on the lists, as (desktop, bot): the phone's own choice,
   /// the desktop keeps no pin for a bot.
   Set<(String, String)> pinnedBots = {};
+
+  /// The groups pinned on the list, as (desktop, group): the phone's own
+  /// choice, the desktop keeps no pin for a group.
+  Set<(String, String)> pinnedGroups = {};
+
+  /// 推荐回复是手机本地偏好，按电脑与 Bot 隔离，默认关闭。
+  Set<(String, String)> botSuggestions = {};
 
   /// 界面模式：`list` 是对话列表，`focus` 打开就是对话、列表收在侧边栏。
   String layout = 'list';
@@ -83,8 +92,8 @@ class AppSettings {
     settings.notifyDone = json['notifyDone'] as bool? ?? all;
     settings.notifyBots = json['notifyBots'] as bool? ?? all;
     settings.notificationsAsked = json['notificationsAsked'] == true;
-    settings.keepBackgroundConnection =
-        json['keepBackgroundConnection'] == true;
+    // 没有这个键是旧版本存的：按新装的默认算开着。
+    settings.keepBackgroundConnection = json['keepBackgroundConnection'] != false;
     settings.haptics = json['haptics'] != false;
     settings.autoKeep = json['autoKeepChanges'] == true;
     settings.homeSessions = {
@@ -94,6 +103,15 @@ class AppSettings {
     };
     settings.pinnedBots = {
       for (final entry in (json['pinnedBots'] as List?) ?? const [])
+        if (entry case [final String desktop, final String bot]) (desktop, bot),
+    };
+    settings.pinnedGroups = {
+      for (final entry in (json['pinnedGroups'] as List?) ?? const [])
+        if (entry case [final String desktop, final String group])
+          (desktop, group),
+    };
+    settings.botSuggestions = {
+      for (final entry in (json['botSuggestions'] as List?) ?? const [])
         if (entry case [final String desktop, final String bot]) (desktop, bot),
     };
     settings.layout = json['layout'] == 'focus' ? 'focus' : 'list';
@@ -127,6 +145,12 @@ class AppSettings {
     ],
     'pinnedBots': [
       for (final (desktop, bot) in pinnedBots) [desktop, bot],
+    ],
+    'pinnedGroups': [
+      for (final (desktop, group) in pinnedGroups) [desktop, group],
+    ],
+    'botSuggestions': [
+      for (final (desktop, bot) in botSuggestions) [desktop, bot],
     ],
     'layout': layout,
     'lastSession': switch (lastSession) {

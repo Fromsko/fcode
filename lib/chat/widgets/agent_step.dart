@@ -70,13 +70,19 @@ class AgentStep extends StatefulWidget {
   }
 
   /// How long it ran, or has been running.
-  static Duration? elapsed(AgentItem item, {DateTime? now}) =>
-      item.duration ??
-      switch ((item.status, item.startedAt)) {
-        (CommandStatus.running, final start?) =>
-          (now ?? DateTime.now()).difference(start),
-        _ => null,
-      };
+  static Duration? elapsed(AgentItem item, {DateTime? now}) {
+    final ran =
+        item.duration ??
+        switch ((item.status, item.startedAt)) {
+          (CommandStatus.running, final start?) =>
+            (now ?? DateTime.now()).difference(start),
+          _ => null,
+        };
+    return switch ((item.ranBefore, ran)) {
+      (final before?, final current?) => before + current,
+      (final before, final current) => before ?? current,
+    };
+  }
 
   /// "46s", "2m 14s", "1h 5m".
   static String formatDuration(Duration time, {AgentStrings? strings}) {

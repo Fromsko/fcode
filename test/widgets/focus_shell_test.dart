@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:bao_link/bao_link.dart';
+import 'package:baocode_mobile/chat/widgets/pixel_loader.dart';
 import 'package:baocode_mobile/link/link_store.dart';
 import 'package:baocode_mobile/link/phone_link.dart'
     show DesktopLinkStatus, KeptDesktop;
@@ -78,13 +81,21 @@ class _State extends AppState {
   ]) async {
     calls.add((method, params));
     if (method == LinkMethods.draft) {
+      if (draftAnswer case final answer?) return answer.future;
       return {'session': 'draft-${params['project']}'};
     }
     return null;
   }
 
+  /// Set to hold the desktop's answer to a draft until a test gives it.
+  Completer<Object?>? draftAnswer;
+
   @override
   Future<void> openSession(String desktopId, String sessionId) async {}
+  final refreshed = <String>[];
+  @override
+  Future<void> refreshDesktop(String desktopId) async =>
+      refreshed.add(desktopId);
   @override
   Future<void> closeSession(String desktopId, String sessionId) async {}
 }
@@ -116,6 +127,56 @@ Future<void> _openPanel(WidgetTester tester) async {
 }
 
 void main() {
+  testWidgets('打开侧边栏收起键盘，关上后输入框不会自己拿回焦点', (tester) async {
+    await _pump(tester);
+    await tester.pumpAndSettle();
+    final input = find.byType(EditableText).first;
+    await tester.tap(input);
+    await tester.pump();
+    expect(tester.widget<EditableText>(input).focusNode.hasFocus, isTrue);
+
+    await _openPanel(tester);
+    expect(tester.widget<EditableText>(input).focusNode.hasFocus, isFalse);
+    // 点侧边栏外面的遮罩关上它。
+    await tester.tapAt(
+      Offset(
+        tester.view.physicalSize.width / tester.view.devicePixelRatio - 10,
+        300,
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byType(Drawer), findsNothing);
+    expect(tester.widget<EditableText>(input).focusNode.hasFocus, isFalse);
+    expect(tester.testTextInput.isVisible, isFalse);
+  });
+
+  testWidgets('侧边栏下拉刷新当前电脑，转圈从搜索行下面出来，内容不动', (tester) async {
+    final state = await _pump(tester);
+    await _openPanel(tester);
+    final search = find.descendant(
+      of: find.byType(Drawer),
+      matching: find.text('搜索项目和对话'),
+    );
+    final searchBefore = tester.getTopLeft(search);
+    final gesture = await tester.startGesture(
+      tester.getCenter(_inPanel('对话1')),
+    );
+    await gesture.moveBy(const Offset(0, 40));
+    await gesture.moveBy(const Offset(0, 160));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(tester.getTopLeft(search), searchBefore);
+    final spinner = find.byType(RefreshProgressIndicator);
+    expect(spinner, findsOneWidget);
+    expect(
+      tester.getTopLeft(spinner).dy,
+      greaterThan(tester.getBottomLeft(search).dy),
+    );
+    await gesture.up();
+    await tester.pumpAndSettle();
+    expect(state.refreshed, ['甲']);
+  });
+
   testWidgets('沉浸模式打开就是当前电脑最近的对话，没有底部标签栏', (tester) async {
     await _pump(tester);
     expect(find.byType(FocusShell), findsOneWidget);
@@ -124,7 +185,7 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
   });
 
-  testWidgets('对话里按返回先打开侧边栏，侧边栏开着再按才退出应用', (tester) async {
+  testWidgets('对话里按返回先打开侧边栏，侧边栏开着时连按两次才退出应用', (tester) async {
     final exits = <String>[];
     tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
       SystemChannels.platform,
@@ -145,10 +206,50 @@ void main() {
     expect(find.byType(Drawer), findsOneWidget);
     expect(_page(tester).sessionId, '1');
     expect(exits, isNot(contains('SystemNavigator.pop')));
+
+    // 侧边栏开着：第一次只提示，过了两秒提示收起，再按还是只提示。
     await tester.binding.handlePopRoute();
-    await tester.pumpAndSettle();
+    await tester.pump();
+    expect(find.text('再按一次退出'), findsOneWidget);
+    expect(exits, isNot(contains('SystemNavigator.pop')));
+    await tester.pump(const Duration(seconds: 2));
+    expect(find.text('再按一次退出'), findsNothing);
+    await tester.binding.handlePopRoute();
+    await tester.pump();
+    expect(exits, isNot(contains('SystemNavigator.pop')));
+
+    await tester.pump(const Duration(seconds: 1));
+    await tester.binding.handlePopRoute();
+    await tester.pump();
     expect(exits, contains('SystemNavigator.pop'));
+    expect(find.text('再按一次退出'), findsNothing);
     await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  testWidgets('等电脑回新对话时盖住屏幕，连点只建一个，慢了才转圈', (tester) async {
+    final state = await _pump(tester);
+    final answer = Completer<Object?>();
+    state.draftAnswer = answer;
+    final loader = find.descendant(
+      of: find.byKey(const ValueKey('draft-cover')),
+      matching: find.byType(PixelLoader),
+    );
+    await tester.tap(find.byKey(const ValueKey('chat-new-conversation')));
+    await tester.pump();
+    expect(find.byKey(const ValueKey('draft-cover')), findsOneWidget);
+    expect(loader, findsNothing);
+    await tester.tap(
+      find.byKey(const ValueKey('chat-new-conversation')),
+      warnIfMissed: false,
+    );
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(loader, findsOneWidget);
+    expect(state.calls.where((c) => c.$1 == LinkMethods.draft), hasLength(1));
+
+    answer.complete({'session': 'draft-p'});
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('draft-cover')), findsNothing);
+    expect(_page(tester).sessionId, 'draft-p');
   });
 
   testWidgets('记住的上次对话优先，但只在当前电脑上才用', (tester) async {
@@ -285,9 +386,11 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
   });
 
-  testWidgets('侧边栏顶部的 Bot 和文件入口打开原有页面', (tester) async {
+  testWidgets('侧边栏顶部只有 Bot 和文件入口，打开原有页面', (tester) async {
     await _pump(tester);
     await _openPanel(tester);
+    // 新对话在对话页右上角和各项目的加号里，侧边栏顶上不再重复。
+    expect(_inPanel('新对话'), findsNothing);
     await tester.tap(find.byKey(const ValueKey('side-files')));
     await tester.pumpAndSettle();
     expect(find.byType(FilesTab), findsOneWidget);
@@ -312,7 +415,7 @@ void main() {
     await tester.drag(list, const Offset(0, -400));
     await tester.pumpAndSettle();
     expect(
-      find.byKey(const ValueKey('side-panel-new')).hitTestable(),
+      find.byKey(const ValueKey('side-bots')).hitTestable(),
       findsNothing,
       reason: '入口滚到了标题上面',
     );

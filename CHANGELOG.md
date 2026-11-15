@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.2.1
+
+- New: Bot group chats. Create groups, manage members, @ mention, quote and send pictures.
+- New: upload files in chat and view them right on the phone. Needs the next desktop version.
+- New: suggested replies for Bots. Tap to send; long-press to edit first.
+- New: choose whether a Bot may message you first.
+- Improved: reconnecting or reopening a conversation syncs only what changed, so it's faster.
+- Improved: Bot chats and group chats share one composer, with pinning.
+- Improved: pull to refresh follows your finger and also works in files and a project's conversations; stronger haptics.
+- Improved: in list layout, the back button shows a dot when a conversation is waiting for you.
+- Improved: a more compact chat layout.
+- Fixed: on Windows, viewing a file's changes marked the whole file as changed.
+- Fixed: Bot replies and group messages sometimes showed wrongly or leaked into private chats.
+
 ## 0.2.0
 
 - New: a "Focus" option under Layout opens straight into your last conversation, with projects and conversations in a side panel, grouped by project; tap one to switch. "List" stays the default.

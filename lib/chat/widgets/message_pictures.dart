@@ -30,6 +30,9 @@ class ProjectPicture extends StatefulWidget {
 }
 
 class _ProjectPictureState extends State<ProjectPicture> {
+  // `C:/…` 解析出的 `c` 不是网址的协议，是 Windows 电脑上的盘符。
+  static final _windowsPath = RegExp(r'^[A-Za-z]:[\\/]');
+
   Uint8List? _bytes;
   bool _loading = false;
   String? _error;
@@ -99,7 +102,7 @@ class _ProjectPictureState extends State<ProjectPicture> {
       onPressed:
           _loading ||
               (widget.projectId == null && widget.botId == null) ||
-              (uri?.hasScheme ?? false)
+              ((uri?.hasScheme ?? false) && !_windowsPath.hasMatch(widget.path))
           ? null
           : _load,
       icon: _loading
@@ -168,6 +171,12 @@ class _MemoryPictureState extends State<MemoryPicture> {
   @override
   Widget build(BuildContext context) {
     final name = widget.name;
+    final width = widget.width;
+    final ratio = MediaQuery.maybeDevicePixelRatioOf(context);
+    // 缩略图按显示宽度解码；点开的全屏画廊仍用原图。
+    final image = width == null || ratio == null
+        ? _image
+        : ResizeImage.resizeIfNeeded((width * ratio).round(), null, _image);
     return GestureDetector(
       onTap: () => showImageGallery(
         context,
@@ -175,8 +184,8 @@ class _MemoryPictureState extends State<MemoryPicture> {
         initialIndex: widget.group == null ? 0 : widget.index,
       ),
       child: Image(
-        image: _image,
-        width: widget.width,
+        image: image,
+        width: width,
         height: widget.height,
         fit: widget.fit,
         semanticLabel: name,

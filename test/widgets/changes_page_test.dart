@@ -320,6 +320,45 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('原文来自 HEAD 时在差异上方说明与上次提交比较', (tester) async {
+    final state = _RecordingState()
+      ..file = {'original': 'old', 'text': 'new', 'originalFrom': 'head'};
+    addTearDown(state.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ProjectFilePage(
+          state: state,
+          desktopId: 'desk-A',
+          projectId: 'p',
+          path: 'a.txt',
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byType(DiffView), findsOneWidget);
+    expect(find.text('与上次提交比较'), findsOneWidget);
+    expect(
+      tester.getTopLeft(find.text('与上次提交比较')).dy,
+      lessThan(tester.getTopLeft(find.byType(DiffView)).dy),
+    );
+    // An older desktop sends no 'originalFrom': no note.
+    state.file = {'original': 'old', 'text': 'new'};
+    await tester.pumpWidget(MaterialApp(home: Container()));
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ProjectFilePage(
+          state: state,
+          desktopId: 'desk-A',
+          projectId: 'p',
+          path: 'a.txt',
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byType(DiffView), findsOneWidget);
+    expect(find.text('与上次提交比较'), findsNothing);
+  });
+
   testWidgets('差异页标题只显示文件名，目录在下方', (tester) async {
     final state = _RecordingState()..file = {'original': 'a', 'text': 'b'};
     addTearDown(state.dispose);

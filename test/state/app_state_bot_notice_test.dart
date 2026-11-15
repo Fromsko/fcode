@@ -242,6 +242,7 @@ void main() {
   test('权限被拒时不抛出、不重试，后续新通知仍可发送', () async {
     await start();
     channelCalls.clear();
+    store.writes.clear();
     await publish({'d1': snapshot([])});
     failure = PlatformException(code: 'denied');
     await publish({

@@ -1,12 +1,14 @@
 // YCode — GPL-3.0-only.
 import 'dart:async';
+
+import 'conversation_images.dart';
+
 import 'dart:math' as math;
 
 import 'package:bao_link/bao_link.dart';
 import 'package:clock/clock.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter/rendering.dart' show ScrollDirection;
 import 'package:image_picker/image_picker.dart';
 
 import '../../chat/chat_models.dart';
@@ -19,18 +21,20 @@ import '../../chat/widgets/notice_row.dart';
 import '../../chat/message_view.dart';
 import '../../chat/widgets/pixel_loader.dart';
 import '../../link/chat_codec.dart';
-import '../../models/user_facing_error.dart';
 import '../../link/phone_link.dart' show DesktopLinkStatus;
 import '../../state/app_state.dart';
 import '../../theme/app_theme.dart';
+import '../../ui/widgets/file_attachment.dart';
 import '../../state/conversation_binding.dart';
 import '../../state/conversation_input.dart';
+import '../../state/upload_file.dart';
 import '../../state/local_message_queue.dart';
 import '../files/files_tab.dart';
 import '../bots/bots_tab.dart';
 import '../widgets/image_gallery.dart';
 import '../widgets/lucide_icon.dart';
 import '../widgets/dropdown_panel.dart';
+import '../widgets/earlier_messages.dart';
 import '../widgets/fold_row.dart';
 import '../widgets/mobile_widgets.dart';
 import '../widgets/model_icon.dart';
@@ -38,7 +42,7 @@ import 'changes_page.dart';
 import 'goal_page.dart';
 import 'interaction_panel.dart';
 import 'bot_working_line.dart';
-import 'emoji_panel.dart';
+import 'chat_input_bar.dart';
 import 'model_settings_sheet.dart';
 import 'chat_empty_state.dart';
 import 'chat_composer_action.dart';
@@ -57,11 +61,11 @@ import '../conversations/open_conversation.dart';
 import 'task_page.dart';
 import 'subagent_page.dart';
 import '../user_message.dart';
-import '../widgets/formats.dart';
 
 part 'chat_page_choices.dart';
 part 'chat_page_composer.dart';
 part 'chat_page_history.dart';
+part 'chat_page_upload.dart';
 
 class ChatPage extends StatefulWidget {
   const ChatPage({
@@ -103,7 +107,7 @@ class ChatPage extends StatefulWidget {
   State<ChatPage> createState() => _ChatPageState();
 }
 
-class _ChatPageState extends State<ChatPage> {
+class _ChatPageState extends State<ChatPage> with ChatAddPanelHost<ChatPage> {
   late final TextEditingController _composer;
   final _scroll = ScrollController();
   final _historyListKey = GlobalKey();
@@ -112,9 +116,8 @@ class _ChatPageState extends State<ChatPage> {
   int _jumpTicket = 0;
   final _composerFocus = FocusNode();
   final _addRegion = Object();
-  bool _addOpen = false;
-  // 打开的是表情面板，不是加号面板；只有 Bot 有。
-  bool _emojiPanel = false;
+  @override
+  FocusNode get addFocus => _composerFocus;
   bool get _pinned => widget.state.sessions.any(
     (ref) =>
         ref.desktopId == widget.desktopId &&
@@ -125,6 +128,15 @@ class _ChatPageState extends State<ChatPage> {
   final _mentions = <String>{};
   Timer? _draftTimer;
   bool _sending = false, _commandBusy = false, _picking = false;
+  final _files = <DraftFile>[];
+  final _beforeEditFiles = <DraftFile>[];
+  Object? _fileSelection;
+  int _fileGeneration = 0;
+  bool get _uploading =>
+      _fileSelection != null ||
+      _files.any((file) => file.status == DraftFileStatus.uploading);
+  bool get _filesReady => _files.every((file) => file.ready);
+  final _botReplySuggestions = BotReplySuggestions();
 
   /// The conversation has been asked for once: an empty one is empty, not
   /// still on its way.
@@ -186,6 +198,7 @@ class _ChatPageState extends State<ChatPage> {
     text: _composer.text,
     images: List.of(_images),
     mentions: Set.of(_mentions),
+    files: List.of(_files),
     imagesMissing: _imagesMissing,
   );
   String get _sessionId =>
@@ -251,6 +264,10 @@ class _ChatPageState extends State<ChatPage> {
       legacySessionId: widget.sessionId,
     );
     _images.addAll(draft.images);
+    _files.addAll(draft.files);
+    // 页面拥有上传回调；旧页面离开后内存草稿不能永远显示上传中。
+    _invalidateFileUploads();
+    _fileGeneration = _binding.generation;
     _mentions.addAll(draft.mentions);
     _imagesMissing = draft.imagesMissing;
     _composer = TextEditingController(
@@ -272,8 +289,83 @@ class _ChatPageState extends State<ChatPage> {
     });
   }
 
+  /// 同一个位置换成了别的电脑、项目或会话：旧页面在途的上传失去归属，
+  /// 旧草稿存回旧会话，输入区换成新会话自己的草稿。
+  @override
+  void didUpdateWidget(ChatPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.state == widget.state &&
+        oldWidget.desktopId == widget.desktopId &&
+        oldWidget.sessionId == widget.sessionId &&
+        oldWidget.projectId == widget.projectId &&
+        oldWidget.botId == widget.botId) {
+      return;
+    }
+    _draftTimer?.cancel();
+    // 与 dispose 相同：还在路上的上传不能显示成成功。
+    _invalidateFileUploads();
+    final oldSession = oldWidget.botId == null
+        ? oldWidget.sessionId
+        : 'bot:${oldWidget.botId}';
+    final oldDraft = InputDraft(
+      text: _composer.text,
+      images: List.of(_images),
+      mentions: Set.of(_mentions),
+      files: List.of(_files),
+      imagesMissing: _imagesMissing,
+    );
+    // 编辑中的草稿在进入编辑时已存过；这里只保存输入区现有的内容。
+    if (_editIndex == null && !oldDraft.isEmpty) {
+      unawaited(
+        oldWidget.state
+            .saveInputDraft(oldWidget.desktopId, oldSession, oldDraft)
+            .catchError((Object _) {}),
+      );
+    }
+    if (oldWidget.state != widget.state) {
+      oldWidget.state.removeListener(_workspaceChanged);
+      widget.state.addListener(_workspaceChanged);
+    }
+    final draft = widget.state.inputDraft(
+      widget.desktopId,
+      _draftSession,
+      legacySessionId: widget.sessionId,
+    );
+    setState(() {
+      _error = null;
+      _sawBot = false;
+      _lastRevision = -1;
+      _editIndex = null;
+      _editAnchor = null;
+      _beforeEdit = null;
+      _beforeEditImages.clear();
+      _beforeEditFiles.clear();
+      _beforeEditMentions.clear();
+      _images
+        ..clear()
+        ..addAll(draft.images);
+      _files
+        ..clear()
+        ..addAll(draft.files);
+      _mentions
+        ..clear()
+        ..addAll(draft.mentions);
+      _imagesMissing = draft.imagesMissing;
+    });
+    // 新会话只恢复它自己的草稿；旧草稿已经存回旧会话，不跟到这里来。
+    _composer.text = draft.text;
+    _workspaceChanged();
+  }
+
   void _bindingChanged() {
-    if (mounted) setState(() {});
+    if (!mounted) return;
+    if (_fileGeneration != _binding.generation) {
+      // 已确认的电脑路径仍有效；只有还在路上的上传失去归属。
+      _invalidateFileUploads();
+      _fileGeneration = _binding.generation;
+      if (_files.isNotEmpty && _editIndex == null) _saveDraft(_composer.text);
+    }
+    setState(() {});
   }
 
   void _workspaceChanged() {
@@ -335,6 +427,7 @@ class _ChatPageState extends State<ChatPage> {
       text: text,
       images: List.of(_images),
       mentions: Set.of(_mentions),
+      files: List.of(_files),
       imagesMissing: _imagesMissing,
     );
     unawaited(
@@ -347,8 +440,10 @@ class _ChatPageState extends State<ChatPage> {
   @override
   void dispose() {
     _draftTimer?.cancel();
-    _reserveTimer?.cancel();
-    if (_editIndex == null && _draftDirty) _saveDraft(_composer.text);
+    _invalidateFileUploads();
+    if (_editIndex == null && (_draftDirty || _files.isNotEmpty)) {
+      _saveDraft(_composer.text);
+    }
     _composer.removeListener(_draftChanged);
     _composer.dispose();
     _composerFocus.dispose();
@@ -544,8 +639,11 @@ class _ChatPageState extends State<ChatPage> {
 
   Future<void> _send() async {
     if (_sending ||
+        _picking ||
+        _uploading ||
         !_online ||
-        (_composer.text.trim().isEmpty && _images.isEmpty)) {
+        !_filesReady ||
+        (_composer.text.trim().isEmpty && _images.isEmpty && _files.isEmpty)) {
       return;
     }
     if (_imagesMissing) {
@@ -619,13 +717,32 @@ class _ChatPageState extends State<ChatPage> {
       );
       return;
     }
+    _botReplySuggestions.dismiss();
     final submitted = _input;
     final operationGeneration = _binding.generation;
-    final text = _composer.text;
-    final images = [for (final image in _images) image.wire];
-    final mentions = _mentions
-        .where((path) => text.contains('@$path'))
-        .toList();
+    final assembled = assembleInput(submitted);
+    final text = assembled.text;
+    final images = [for (final image in submitted.images) image.wire];
+    final mentions = assembled.mentions;
+    final target = (
+      widget.state,
+      widget.desktopId,
+      widget.sessionId,
+      widget.projectId,
+      widget.botId,
+      _editAnchor,
+    );
+    bool current() =>
+        mounted &&
+        target ==
+            (
+              widget.state,
+              widget.desktopId,
+              widget.sessionId,
+              widget.projectId,
+              widget.botId,
+              _editAnchor,
+            );
     setState(() {
       _sending = true;
       _error = null;
@@ -640,7 +757,7 @@ class _ChatPageState extends State<ChatPage> {
           'mentions': mentions,
           if (revertFiles) 'revertFiles': true,
         });
-        if (!mounted) return;
+        if (!current()) return;
         if (_binding.generation != operationGeneration) {
           throw StateError(
             tr(
@@ -660,7 +777,7 @@ class _ChatPageState extends State<ChatPage> {
           images: images,
           mentions: mentions,
         );
-        if (!mounted) return;
+        if (!current()) return;
         if (actual == null || !_binding.acceptSent(actual, generation)) {
           throw StateError(tr('电脑返回的会话未确认', 'Conversation not confirmed'));
         }
@@ -668,14 +785,22 @@ class _ChatPageState extends State<ChatPage> {
       if (!mounted) return;
       // Preserve a newer draft typed while the request was in flight.
       final wasEditing = _editIndex != null;
-      final stillSentText = _composer.text == text;
+      final stillSentText = _composer.text == submitted.text;
       final remaining = _input.afterSending(submitted);
+      final remainingMentions = {
+        ..._mentions,
+        for (final file in submitted.files)
+          if (file.path != null) file.path!,
+      }.where((path) => hasFileMention(remaining.text, path)).toSet();
+      _files
+        ..clear()
+        ..addAll(wasEditing ? _beforeEditFiles : remaining.files);
       _images
         ..clear()
         ..addAll(wasEditing ? _beforeEditImages : remaining.images);
       _mentions
         ..clear()
-        ..addAll(wasEditing ? _beforeEditMentions : remaining.mentions);
+        ..addAll(wasEditing ? _beforeEditMentions : remainingMentions);
       _imagesMissing = wasEditing
           ? _beforeEditImagesMissing
           : remaining.imagesMissing;
@@ -686,6 +811,7 @@ class _ChatPageState extends State<ChatPage> {
       _editAnchor = null;
       _beforeEdit = null;
       _beforeEditImages.clear();
+      _beforeEditFiles.clear();
       _beforeEditMentions.clear();
       _saveDraft(_composer.text);
       _forceBottom();
@@ -712,7 +838,9 @@ class _ChatPageState extends State<ChatPage> {
   double? _viewport;
 
   Future<void> _edit(int index, UserMessageItem item) async {
-    if (_sending || index < 0 || index >= _buffer.items.length) return;
+    if (_sending || _uploading || index < 0 || index >= _buffer.items.length) {
+      return;
+    }
     final anchor = MessageEditAnchor.capture(_buffer, index);
     if (!anchor.matches(_buffer)) {
       setState(
@@ -727,6 +855,9 @@ class _ChatPageState extends State<ChatPage> {
     if (_editIndex == null) {
       _beforeEdit = _composer.text;
       _beforeEditImagesMissing = _imagesMissing;
+      _beforeEditFiles
+        ..clear()
+        ..addAll(_files);
       _beforeEditImages
         ..clear()
         ..addAll(_images);
@@ -741,13 +872,29 @@ class _ChatPageState extends State<ChatPage> {
       _editAnchor = anchor;
       _imagesMissing = false;
       _images.clear();
-      _mentions.clear();
+      // 末尾独立的文件引用回到附件卡片；正文里的行内引用保持原样。
+      final references = fileReferenceRegion(
+        messageBody(item.text, item.images),
+      );
+      _files
+        ..clear()
+        ..addAll([
+          for (final path in references.paths)
+            DraftFile(
+              name: fileReferenceName(path),
+              path: path,
+              status: DraftFileStatus.ready,
+            ),
+        ]);
+      _mentions
+        ..clear()
+        ..addAll(absoluteFileMentions(references.body));
       for (final image in item.images) {
         _images.add(
           DraftImage(image.name ?? 'image', image.mediaType, image.bytes),
         );
       }
-      _composer.text = messageBody(item.text, item.images);
+      _composer.text = references.body;
     });
   }
 
@@ -755,6 +902,9 @@ class _ChatPageState extends State<ChatPage> {
     setState(() {
       // Set controller while still in editing mode so it cannot overwrite the saved draft.
       _composer.text = _beforeEdit ?? '';
+      _files
+        ..clear()
+        ..addAll(_beforeEditFiles);
       _images
         ..clear()
         ..addAll(_beforeEditImages);
@@ -766,6 +916,7 @@ class _ChatPageState extends State<ChatPage> {
       _editAnchor = null;
       _beforeEdit = null;
       _beforeEditImages.clear();
+      _beforeEditFiles.clear();
       _beforeEditMentions.clear();
     });
     _saveDraft(_composer.text);
@@ -776,11 +927,11 @@ class _ChatPageState extends State<ChatPage> {
   @override
   Widget build(BuildContext context) => PopScope(
     // The back gesture closes the add panel before it leaves the page.
-    canPop: !_addOpen && widget.onBack == null,
+    canPop: !addOpen && widget.onBack == null,
     onPopInvokedWithResult: (didPop, _) {
       if (didPop) return;
-      if (_addOpen) {
-        _closeAdd();
+      if (addOpen) {
+        closeAdd();
       } else {
         widget.onBack?.call();
       }
@@ -793,7 +944,7 @@ class _ChatPageState extends State<ChatPage> {
           if (_follow && !buffer.loadingEarlier) _bottom();
           _lastRevision = buffer.revision;
         }
-        final ready = _online && !_sending && !_picking;
+        final ready = _online && !_sending && !_picking && !_uploading;
         final error =
             _error ??
             (_binding.error == buffer.error ? null : _binding.error) ??
@@ -825,9 +976,26 @@ class _ChatPageState extends State<ChatPage> {
                 ),
               ),
         ];
+        final botItems = widget.botId == null
+            ? const <ChatItem?>[]
+            : decodeItems(buffer.items);
+        final botPlaces = ChatCodec.botPlaces(
+          botItems,
+          startsAtBeginning: buffer.earlier != true,
+        );
+        final unknownBotPrefix =
+            widget.botId != null &&
+            botPlaces.contains(ChatCodec.botUnknownPlace);
+        final privateTurn =
+            widget.botId == null ||
+            ChatCodec.botCurrentPlace(
+                  botItems,
+                  startsAtBeginning: buffer.earlier != true,
+                ) ==
+                null;
         final plans = pendingPlans(items, lost: _lostPlans);
         final rows = widget.botId != null
-            ? botRows(items)
+            ? botRows(items, startsAtBeginning: buffer.earlier != true)
             : foldRows(
                     plans.items,
                     live: buffer.live == true,
@@ -837,6 +1005,26 @@ class _ChatPageState extends State<ChatPage> {
                   .where((row) => _online || row.shown is! LiveStatusItem)
                   .toList();
         _rows = rows;
+        final suggestions = widget.botId == null
+            ? const <String>[]
+            : _botReplySuggestions.update(
+                conversation: (
+                  widget.desktopId,
+                  _sessionId,
+                  _binding.generation,
+                ),
+                epoch: widget.state.botSuggestionEpoch(
+                  widget.desktopId,
+                  widget.botId!,
+                ),
+                enabled: widget.state.botSuggestionsEnabled(
+                  widget.desktopId,
+                  widget.botId!,
+                ),
+                live: buffer.live,
+                items: buffer.items,
+                startsAtBeginning: buffer.earlier != true,
+              );
         final bot = widget.state.bots
             .where(
               (ref) =>
@@ -894,18 +1082,40 @@ class _ChatPageState extends State<ChatPage> {
                         ),
                       ),
                     ),
-                  if (buffer.goal case final goal?) _goalTile(context, goal),
+                  if (unknownBotPrefix)
+                    ComposerNotice(
+                      key: const ValueKey('bot-history-context'),
+                      icon: 'info',
+                      title: tr(
+                        '部分历史归属待确认，暂不显示',
+                        'Some history is hidden until its chat is known',
+                      ),
+                      detail: tr(
+                        '加载更早消息可恢复上下文，避免群内容混入私聊',
+                        'Load earlier messages to identify the chat safely',
+                      ),
+                      actionLabel: tr('加载更早消息', 'Load earlier messages'),
+                      onAction:
+                          _online &&
+                              !_loadingEarlier &&
+                              !buffer.loadingEarlier &&
+                              _editIndex == null
+                          ? _earlier
+                          : null,
+                    ),
+                  if (privateTurn && buffer.goal != null)
+                    _goalTile(context, buffer.goal!),
                   Expanded(
                     child: GestureDetector(
                       behavior: HitTestBehavior.translucent,
                       onTap: () {
                         _composerFocus.unfocus();
-                        _closeAdd();
+                        closeAdd();
                       },
                       child: _historyArea(context, buffer, rows, bot, ready),
                     ),
                   ),
-                  if (buffer.interaction case final request?)
+                  if (buffer.interaction case final request? when privateTurn)
                     ConstrainedBox(
                       constraints: BoxConstraints(
                         maxHeight: MediaQuery.sizeOf(context).height * .46,
@@ -928,7 +1138,7 @@ class _ChatPageState extends State<ChatPage> {
                         ),
                       ),
                     ),
-                  if (plans.pending case final pending?)
+                  if (plans.pending case final pending? when privateTurn)
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 16),
                       child: FilledButton.icon(
@@ -957,6 +1167,52 @@ class _ChatPageState extends State<ChatPage> {
                               },
                       ),
                     ),
+                  if (suggestions.isNotEmpty &&
+                      _editIndex == null &&
+                      _composer.text.isEmpty &&
+                      _images.isEmpty &&
+                      _files.isEmpty &&
+                      !_queueing)
+                    SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 6,
+                      ),
+                      child: Row(
+                        children: [
+                          for (final (index, suggestion) in suggestions.indexed)
+                            Padding(
+                              padding: EdgeInsets.only(
+                                left: index == 0 ? 0 : 8,
+                              ),
+                              child: _suggestionChip(
+                                suggestion,
+                                onTap: !ready
+                                    ? null
+                                    : () {
+                                        if (_composer.text.isNotEmpty) return;
+                                        _botReplySuggestions.dismiss();
+                                        _composer.text = suggestion;
+                                        _send();
+                                      },
+                                onLongPress: !ready
+                                    ? null
+                                    : () {
+                                        if (_composer.text.isNotEmpty) return;
+                                        _botReplySuggestions.dismiss();
+                                        _composer.text = suggestion;
+                                        _composer.selection =
+                                            TextSelection.collapsed(
+                                              offset: suggestion.length,
+                                            );
+                                        _composerFocus.requestFocus();
+                                      },
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
                   _composerView(buffer, ready),
                 ],
               ),
@@ -966,6 +1222,39 @@ class _ChatPageState extends State<ChatPage> {
       },
     ),
   );
+
+  Widget _suggestionChip(
+    String suggestion, {
+    VoidCallback? onTap,
+    VoidCallback? onLongPress,
+  }) {
+    final scheme = Theme.of(context).colorScheme;
+    return Material(
+      key: ValueKey(('bot-suggestion', suggestion)),
+      color: scheme.surfaceContainerLowest,
+      shape: StadiumBorder(
+        side: BorderSide(color: scheme.outlineVariant, width: .5),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        onLongPress: onLongPress,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+          child: Text(
+            suggestion,
+            maxLines: 1,
+            style: TextStyle(
+              fontSize: MobileType.secondary,
+              color: onTap == null
+                  ? scheme.onSurface.withValues(alpha: .38)
+                  : scheme.onSurface,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 
   PreferredSizeWidget _appBar(
     BuildContext context,
@@ -989,16 +1278,19 @@ class _ChatPageState extends State<ChatPage> {
     titleSpacing: 4,
     leading:
         widget.leading ??
-        (widget.botId == null
-            ? null
-            : IconButton(
-                tooltip: tr('返回', 'Back'),
-                onPressed: () => Navigator.maybePop(context),
+        (widget.botId != null
+            ? AttentionBackButton(
+                state: widget.state,
                 icon: const Icon(Icons.arrow_back_ios_new, size: 20),
-              )),
+              )
+            : Navigator.canPop(context)
+            ? AttentionBackButton(state: widget.state)
+            : null),
     title: SessionSyncGate(
       online: _online,
       loading: buffer.loading,
+      // 已有内容：多半是回前台静默核对，慢慢再说。首次打开才急着提示。
+      hasContent: buffer.items.isNotEmpty,
       builder: (context, syncing) => widget.botId != null
           ? Column(
               mainAxisSize: MainAxisSize.min,
@@ -1053,12 +1345,9 @@ class _ChatPageState extends State<ChatPage> {
       else
         PopupMenuButton<String>(
           tooltip: tr('更多', 'More'),
-          icon: Badge(
-            isLabelVisible: buffer.tasks.any(
-              (task) => task.status == 'running',
-            ),
-            child: const Icon(Icons.more_horiz),
-          ),
+          // 不再在 ⋯ 上点红点：后台任务已经在输入框上方的胶囊里写着，
+          // 这里再标一次容易当成未读。
+          icon: const Icon(Icons.more_horiz),
           position: PopupMenuPosition.under,
           constraints: const BoxConstraints(minWidth: 200),
           onSelected: (action) => runUi(context, () => _sessionMenu(action)),
@@ -1264,14 +1553,6 @@ class _ChatPageState extends State<ChatPage> {
     }
     return null;
   }
-
-  /// The last keyboard height seen with the composer focused; the add panel
-  /// takes its place.
-  double? _seenKeyboard;
-
-  /// The room the closed panel keeps while the keyboard rises in its place.
-  double _reserve = 0;
-  Timer? _reserveTimer;
 
   Future<void> _openRunningAgent(RunningAgent selected) async {
     if (!mounted) return;

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:bao_link/bao_link.dart';
 
 import 'conversation_filters.dart';
@@ -7,6 +9,7 @@ import 'session_press_row.dart';
 import 'package:flutter/material.dart';
 
 import '../../chat/chat_models.dart';
+import '../../chat/widgets/pixel_loader.dart';
 import '../../link/chat_codec.dart';
 import '../../link/phone_link.dart' show DesktopLinkStatus;
 import '../../state/app_state.dart';
@@ -21,6 +24,7 @@ import '../widgets/lucide_icon.dart';
 import '../widgets/mobile_widgets.dart';
 import '../widgets/model_icon.dart';
 import '../widgets/project_icon_view.dart';
+import '../widgets/pull_refresh.dart';
 import '../widgets/formats.dart';
 
 /// A new conversation, as the desktop's own starts one: in the project
@@ -84,9 +88,9 @@ Future<void> _openDraft(
   AppState state,
   ProjectRef project, {
   bool replace = false,
-}) => runUi(context, () async {
-  final id = await requestDraft(state, project);
-  if (!context.mounted) return;
+}) async {
+  final id = await draftWithCover(context, state, project);
+  if (id == null || !context.mounted) return;
   final page = ChatPage(
     state: state,
     desktopId: project.desktopId,
@@ -110,7 +114,66 @@ Future<void> _openDraft(
   } else {
     await Navigator.of(context).push(route);
   }
-});
+}
+
+bool _drafting = false;
+
+/// [requestDraft] with the screen covered while the desktop answers: taps
+/// wait, and a loader shows if it takes a moment. Null when it failed (said
+/// already) or another is being made.
+Future<String?> draftWithCover(
+  BuildContext context,
+  AppState state,
+  ProjectRef project,
+) async {
+  if (_drafting) return null;
+  _drafting = true;
+  final cover = OverlayEntry(builder: (_) => const _DraftCover());
+  Overlay.of(context, rootOverlay: true).insert(cover);
+  try {
+    return await runUi(context, () => requestDraft(state, project));
+  } finally {
+    cover.remove();
+    _drafting = false;
+  }
+}
+
+class _DraftCover extends StatefulWidget {
+  const _DraftCover();
+
+  @override
+  State<_DraftCover> createState() => _DraftCoverState();
+}
+
+class _DraftCoverState extends State<_DraftCover> {
+  bool _slow = false;
+  late final Timer _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    // 电脑很快回话时不闪一下加载。
+    _timer = Timer(
+      const Duration(milliseconds: 250),
+      () => setState(() => _slow = true),
+    );
+  }
+
+  @override
+  void dispose() {
+    _timer.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => Stack(
+    key: const ValueKey('draft-cover'),
+    children: [
+      const ModalBarrier(dismissible: false),
+      if (_slow) const Center(child: PixelLoader.agent(size: 32)),
+    ],
+  );
+}
 
 /// A draft conversation in [project], as the desktop starts one: its id.
 Future<String> requestDraft(AppState state, ProjectRef project) async {
@@ -212,6 +275,13 @@ class _ChatsTabState extends State<ChatsTab> {
     super.dispose();
   }
 
+  /// 下拉刷新：在线就在这条连接上重取电脑状态，离线就立刻重拨。
+  Future<void> _refresh(AppState state, String? desktopId) async {
+    if (desktopId == null) return;
+    if (!state.desktops.any((desktop) => desktop.id == desktopId)) return;
+    await state.refreshDesktop(desktopId);
+  }
+
   void _clearFilters() => setState(() {
     _filters = const ConversationFilters();
     _search.clear();
@@ -246,16 +316,6 @@ class _ChatsTabState extends State<ChatsTab> {
           )
           .isNotEmpty;
     }).toList();
-    // 所有 Bot 都在首页有一行，不只是助理：自己加的那些也能直接点开聊。
-    final bots = state.bots
-        .where(
-          (b) =>
-              b.desktopId == desktopId &&
-              '${b.bot.name} ${b.bot.last ?? ''}'.toLowerCase().contains(
-                _filters.query.trim().toLowerCase(),
-              ),
-        )
-        .toList();
     return Scaffold(
       appBar: AppBar(
         centerTitle: true,
@@ -298,12 +358,6 @@ class _ChatsTabState extends State<ChatsTab> {
       ),
       body: Column(
         children: [
-          SearchCapsule(
-            state: state,
-            controller: _search,
-            onChanged: (value) =>
-                setState(() => _filters = ConversationFilters(query: value)),
-          ),
           if (_filters.searching)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -333,12 +387,23 @@ class _ChatsTabState extends State<ChatsTab> {
                     onAction: () =>
                         openPage<void>(context, PairDevicePage(state: state)),
                   )
-                : ListView(
-                    children: [
-                      ..._merged(projects, bots, home),
-                      if (projects.isEmpty && home.isEmpty && bots.isEmpty)
-                        _emptyNote(state, desktopId),
-                    ],
+                : PullRefresh(
+                    header: SearchCapsule(
+                      state: state,
+                      controller: _search,
+                      onChanged: (value) => setState(
+                        () => _filters = ConversationFilters(query: value),
+                      ),
+                    ),
+                    onArmed: state.haptic,
+                    onRefresh: () => _refresh(state, desktopId),
+                    child: ListView(
+                      children: [
+                        ..._merged(projects, home),
+                        if (projects.isEmpty && home.isEmpty)
+                          _emptyNote(state, desktopId),
+                      ],
+                    ),
                   ),
           ),
         ],
@@ -533,13 +598,11 @@ class _ChatsTabState extends State<ChatsTab> {
   static const _unfoldCurve = Curves.easeOutCubic;
   static const _unfoldIndent = 28.0;
 
-  /// Projects, bots and the conversations put on the home list by their
-  /// latest activity, as a chat app orders its chats: pinned conversations
-  /// first, then pinned projects and bots, those with no activity last in
-  /// their own order.
+  /// Projects and the conversations put on the home list by their latest
+  /// activity, as a chat app orders its chats: pinned conversations first,
+  /// then pinned projects, those with no activity last in their own order.
   List<Widget> _merged(
     List<ConversationProject> projects,
-    List<BotRef> bots,
     List<SessionRef> home,
   ) {
     final state = widget.state;
@@ -555,16 +618,6 @@ class _ChatsTabState extends State<ChatsTab> {
           item.ref.project.pinned == true ? 1 : 2,
           item.activity,
           _projectRow(state, item),
-        ),
-      for (final ref in bots)
-        (
-          state.botPinned(ref) ? 1 : 2,
-          ref.bot.updatedAt,
-          _BotChatRow(
-            key: ValueKey('bot-${ref.desktopId}-${ref.bot.id}'),
-            state: state,
-            ref: ref,
-          ),
         ),
     ];
     final order = {for (final (i, row) in rows.indexed) row.$3: i};
@@ -634,42 +687,6 @@ class _ChatsTabState extends State<ChatsTab> {
   }
 
   String _time(DateTime date) => sessionTime(widget.state, date);
-}
-
-class _BotChatRow extends StatelessWidget {
-  const _BotChatRow({super.key, required this.state, required this.ref});
-  final AppState state;
-  final BotRef ref;
-  @override
-  Widget build(BuildContext context) => BotPressRow(
-    state: state,
-    ref: ref,
-    child: ListRow(
-      leading: Badge(
-        isLabelVisible: ref.bot.unread > 0,
-        label: Text('${ref.bot.unread}'),
-        offset: const Offset(6, -6),
-        child: BotAvatar(state: state, ref: ref),
-      ),
-      title: ref.bot.name,
-      subtitle: ref.bot.last,
-      time: switch (ref.bot.updatedAt) {
-        final at? => sessionTime(state, at),
-        null => null,
-      },
-      status: state.botPinned(ref) ? const LucideIcon('pin', size: 16) : null,
-      onTap: () => openPage<void>(
-        context,
-        ChatPage(
-          state: state,
-          desktopId: ref.desktopId,
-          sessionId: ref.bot.session ?? 'bot:${ref.bot.id}',
-          title: ref.bot.name,
-          botId: ref.bot.id,
-        ),
-      ),
-    ),
-  );
 }
 
 class ProjectChatsPage extends StatelessWidget {
@@ -757,10 +774,14 @@ class ProjectChatsPage extends StatelessWidget {
                       onAction: () =>
                           newConversation(context, state, project: project),
                     )
-                  : ListView.builder(
-                      itemCount: sessions.length,
-                      itemBuilder: (context, index) =>
-                          projectSessionRow(context, state, sessions[index]),
+                  : PullRefresh(
+                      onArmed: state.haptic,
+                      onRefresh: () => state.refreshDesktop(project.desktopId),
+                      child: ListView.builder(
+                        itemCount: sessions.length,
+                        itemBuilder: (context, index) =>
+                            projectSessionRow(context, state, sessions[index]),
+                      ),
                     ),
             ),
           ],

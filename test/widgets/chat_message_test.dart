@@ -16,6 +16,53 @@ import 'package:flutter_test/flutter_test.dart';
 import '../support/chat_page_harness.dart';
 
 void main() {
+  testWidgets('项目对话整段历史共用一个选中区，跨消息能选中', (tester) async {
+    final state = ChineseChatPageState();
+    addTearDown(state.dispose);
+    state.history.items.addAll([
+      {'t': 'user', 'text': '第一段项目对话'},
+      {'t': 'assistant', 'text': '第二段项目回答'},
+    ]);
+    state.history.revision++;
+    await tester.pumpWidget(chatHost(state));
+    await tester.pumpAndSettle();
+    // 历史列表只包一层选中区；每段回复不再各包一层。
+    expect(
+      find.ancestor(
+        of: find.byType(CustomScrollView),
+        matching: find.byType(SelectionArea),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: find.byType(CustomScrollView),
+        matching: find.byType(SelectionArea),
+      ),
+      findsNothing,
+    );
+    final selectables = find.byWidgetPredicate(
+      (widget) => widget is SelectableRegion,
+    );
+    expect(selectables, findsOneWidget);
+  });
+
+  testWidgets('Bot 聊天仍逐条长按，不套整段选中区', (tester) async {
+    final state = ChineseChatPageState();
+    addTearDown(state.dispose);
+    state.history.items.add({'t': 'user', 'text': 'Bot 里的问题'});
+    state.history.revision++;
+    await tester.pumpWidget(chatHost(state, bot: 'bot'));
+    await tester.pumpAndSettle();
+    expect(
+      find.descendant(
+        of: find.byType(CustomScrollView),
+        matching: find.byType(SelectionArea),
+      ),
+      findsNothing,
+    );
+  });
+
   testWidgets('模式中文说明和图标不改变option id', (tester) async {
     final state = ChineseChatPageState();
     addTearDown(state.dispose);

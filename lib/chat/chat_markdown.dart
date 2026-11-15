@@ -21,10 +21,16 @@ class ChatMarkdown extends StatefulWidget {
     required this.text,
     this.projectId,
     this.botId,
+    this.style,
+    this.selectable = true,
   });
   final AppState state;
   final String desktopId, text;
   final String? projectId, botId;
+  final TextStyle? style;
+
+  /// 关掉时长按留给外面（Bot 气泡的菜单），不弹系统的选字。
+  final bool selectable;
 
   @override
   State<ChatMarkdown> createState() => _ChatMarkdownState();
@@ -132,17 +138,19 @@ class _ChatMarkdownState extends State<ChatMarkdown> {
         .firstOrNull
         ?.project
         .path;
+    final view = MarkdownView(
+      widget.text,
+      style: widget.style ?? MobileTheme.messageStyleOf(context),
+      options: _options,
+    );
+    // 整段历史已经在一个 SelectionArea 里时不再各包一层，跨消息选中才算数。
+    final selected =
+        widget.selectable && SelectionContainer.maybeOf(context) == null;
     return CodeCitationScope(
       root: root,
       onOpen: _hasFiles ? _openCitation : null,
       colorizeBlock: _colorizeBlock,
-      child: SelectionArea(
-        child: MarkdownView(
-          widget.text,
-          style: MobileTheme.messageStyleOf(context),
-          options: _options,
-        ),
-      ),
+      child: selected ? SelectionArea(child: view) : view,
     );
   }
 }

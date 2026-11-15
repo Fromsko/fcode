@@ -70,44 +70,25 @@ extension _History on _ChatPageState {
         ?.index;
   }
 
-  /// Whether the user is dragging or flinging the list, and where they leave
-  /// it. Only their scrolling moves [_follow]: the list growing under a
-  /// streaming reply, or our own `jumpTo`, never does.
-  bool _onScroll(ScrollNotification notification) {
-    if (notification.depth != 0 || notification.metrics.axis != Axis.vertical) {
-      return false;
-    }
-    final was = _userScrolling;
-    if (notification is ScrollStartNotification &&
+  /// 用户是否在自己滚：是否在滚由 [UserScrollTracker] 判断（和
+  /// [EarlierOnScroll] 共用一份），这里只记下这次拖动要作废跳转、收起胶囊。
+  void _onUserScroll(ScrollNotification notification, bool scrolling) {
+    if (_userScrolling != scrolling) _userScrolling = scrolling;
+    if (scrolling &&
+        notification is ScrollStartNotification &&
         notification.dragDetails != null) {
-      _userScrolling = true;
       _jumpTicket++;
       _trayFold.value++;
-    } else if (notification is UserScrollNotification) {
-      _userScrolling = notification.direction != ScrollDirection.idle;
     }
-    if (_userScrolling || was) {
-      final metrics = notification.metrics;
-      final delta = switch (notification) {
-        ScrollUpdateNotification(:final scrollDelta) => scrollDelta ?? 0.0,
-        OverscrollNotification(:final overscroll) => overscroll,
-        _ => 0.0,
-      };
-      final towardEarlier = delta < 0;
-      final fromEnd = metrics.maxScrollExtent - metrics.pixels;
-      // 往上翻一点就不再跟随；往下回到底部附近才重新跟随。
-      if (towardEarlier && fromEnd > 16) {
-        _setFollow(false);
-      } else if (delta > 0 && fromEnd < 100) {
-        _setFollow(true);
-      }
-      if (towardEarlier &&
-          metrics.extentBefore < 160 &&
-          _earlierError == null) {
-        unawaited(_earlier());
-      }
+  }
+
+  /// 用户自己在滚，[_follow] 跟着走：往上翻一点就不再跟随，往下回到底部
+  /// 附近才重新跟随。新内容长出来、我们自己的 `jumpTo` 都不经过这里。
+  void _onScrollDelta(ScrollNotification notification, double delta) {
+    if (!_userScrolling) return;
+    if (followAfterScroll(notification.metrics, delta) case final follow?) {
+      _setFollow(follow);
     }
-    return false;
   }
 
   /// The list's height changes under the keyboard or what docks over the
@@ -410,6 +391,7 @@ extension _History on _ChatPageState {
     }
     final firstNewer = rows.indexWhere((row) => row.index >= _centerItem);
     final older = firstNewer < 0 ? rows.length : firstNewer;
+    final loadingEarlier = _loadingEarlier || buffer.loadingEarlier;
     final rowPositions = <Key, int>{
       for (final (position, row) in rows.indexed)
         ?_historyRowKeys[_historyRowId(row)]: position + 1,
@@ -467,113 +449,95 @@ extension _History on _ChatPageState {
               Positioned.fill(
                 child: NotificationListener<ScrollMetricsNotification>(
                   onNotification: _onViewport,
-                  child: NotificationListener<ScrollNotification>(
-                    onNotification: _onScroll,
-                    child: Opacity(
-                      key: const ValueKey('history-reveal'),
-                      opacity: _placed ? 1 : 0,
-                      child: CustomScrollView(
-                        key: _historyListKey,
-                        controller: _scroll,
-                        center: const ValueKey('history-center'),
-                        keyboardDismissBehavior:
-                            ScrollViewKeyboardDismissBehavior.onDrag,
-                        slivers: [
-                          SliverList.builder(
-                            itemCount: older,
-                            findChildIndexCallback: (key) =>
-                                switch (rowPositions[key]) {
-                                  final position? when position <= older =>
-                                    older - position,
-                                  _ => null,
-                                },
-                            itemBuilder: (context, index) => _historyItem(
-                              context,
-                              older - index,
-                              rows,
-                              buffer,
-                              bot,
-                              ready,
-                              previousSent,
-                            ),
-                          ),
-                          SliverPadding(
-                            key: const ValueKey('history-center'),
-                            padding: const EdgeInsets.only(top: 8),
-                            sliver: SliverList.builder(
-                              itemCount: rows.length - older,
+                  child: Opacity(
+                    key: const ValueKey('history-reveal'),
+                    opacity: _placed ? 1 : 0,
+                    child: EarlierOnScroll(
+                      canLoad: () =>
+                          _online &&
+                          _editIndex == null &&
+                          _buffer.earlier == true &&
+                          _earlierError == null,
+                      onLoad: () => unawaited(_earlier()),
+                      onUserScroll: _onUserScroll,
+                      onScrollDelta: _onScrollDelta,
+                      // 项目对话整段历史共用一个选中区，跨消息选中才连得起来。
+                      child: _selectableHistory(
+                        CustomScrollView(
+                          key: _historyListKey,
+                          controller: _scroll,
+                          center: const ValueKey('history-center'),
+                          keyboardDismissBehavior:
+                              ScrollViewKeyboardDismissBehavior.onDrag,
+                          slivers: [
+                            SliverList.builder(
+                              itemCount: older,
                               findChildIndexCallback: (key) =>
                                   switch (rowPositions[key]) {
-                                    final position? when position > older =>
-                                      position - older - 1,
+                                    final position? when position <= older =>
+                                      older - position,
                                     _ => null,
                                   },
                               itemBuilder: (context, index) => _historyItem(
                                 context,
-                                older + 1 + index,
+                                older - index,
                                 rows,
                                 buffer,
                                 bot,
                                 ready,
                                 previousSent,
-                                // 最后一条和下面的输入栏之间留一点空，滚到底
-                                // 时不至于贴着那块的边。
-                                tail: index == rows.length - older - 1,
                               ),
                             ),
-                          ),
-                        ],
+                            SliverPadding(
+                              key: const ValueKey('history-center'),
+                              padding: const EdgeInsets.only(top: 8),
+                              sliver: SliverList.builder(
+                                itemCount: rows.length - older,
+                                findChildIndexCallback: (key) =>
+                                    switch (rowPositions[key]) {
+                                      final position? when position > older =>
+                                        position - older - 1,
+                                      _ => null,
+                                    },
+                                itemBuilder: (context, index) => _historyItem(
+                                  context,
+                                  older + 1 + index,
+                                  rows,
+                                  buffer,
+                                  bot,
+                                  ready,
+                                  previousSent,
+                                  // 最后一条和下面的输入栏之间留一点空，滚到底
+                                  // 时不至于贴着那块的边。
+                                  tail: index == rows.length - older - 1,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
                 ),
               ),
-              ?_earlierStatus(context, buffer),
+              // 有状态才挂：隐藏时不占 Stack 的子项，浮层自己渲染成 Positioned。
+              if (loadingEarlier || _earlierError != null)
+                EarlierStatusOverlay(
+                  loading: loadingEarlier,
+                  error: _earlierError,
+                  onRetry: _online && !loadingEarlier && _editIndex == null
+                      ? _earlier
+                      : null,
+                  tr: tr,
+                ),
               _jumpButton(context),
             ],
           );
   }
 
-  /// 取更早消息的状态浮在列表上，出现和消失都不挪动内容。
-  Widget? _earlierStatus(BuildContext context, SessionBuffer buffer) {
-    final error = _earlierError;
-    if (error == null && !_loadingEarlier && !buffer.loadingEarlier) {
-      return null;
-    }
-    return Positioned(
-      top: 8,
-      left: 16,
-      right: 16,
-      child: Center(
-        child: Material(
-          color: Theme.of(context).colorScheme.surfaceContainerHigh,
-          elevation: 2,
-          borderRadius: BorderRadius.circular(MobileSizes.radius),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            child: error == null
-                ? Text(tr('加载中…', 'Loading…'))
-                : Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(error),
-                      TextButton(
-                        onPressed:
-                            _online &&
-                                !_loadingEarlier &&
-                                !buffer.loadingEarlier &&
-                                _editIndex == null
-                            ? _earlier
-                            : null,
-                        child: Text(tr('重试', 'Retry')),
-                      ),
-                    ],
-                  ),
-          ),
-        ),
-      ),
-    );
-  }
+  /// 项目对话的整段历史共用一个选中区；Bot 聊天各条自己可选中或长按。
+  Widget _selectableHistory(Widget child) =>
+      widget.botId == null ? SelectionArea(child: child) : child;
 
   Widget _historyItem(
     BuildContext context,
@@ -661,9 +625,7 @@ extension _History on _ChatPageState {
               final showTime =
                   widget.botId != null &&
                   sentAt != null &&
-                  (previousTime == null ||
-                      sentAt.difference(previousTime) >
-                          const Duration(minutes: 5));
+                  ChatTimeLine.between(previousTime, sentAt);
               final mine = widget.botId == null && raw is UserMessageItem;
               final hasPrevious = mine && _nearestMine(index, up: true) != null;
               final moreEarlier =
@@ -696,28 +658,18 @@ extension _History on _ChatPageState {
                   desktopId: widget.desktopId,
                   sessionId: id,
                 ),
-                onEdit: ready && !buffer.loadingEarlier
+                // Bot 的时间线只往后记，改过的话它记不住，单聊不给编辑。
+                onEdit: widget.botId == null && ready && !buffer.loadingEarlier
                     ? (item) => _edit(index, item)
                     : null,
               );
               if (!showTime) return message;
-              final now = DateUtils.dateOnly(DateTime.now());
-              final day = DateUtils.dateOnly(sentAt);
-              final clock = formatClock(sentAt);
-              final label = day == now
-                  ? clock
-                  : day == now.subtract(const Duration(days: 1))
-                  ? '${tr('昨天', 'Yesterday')} $clock'
-                  : '${formatDay(widget.state, sentAt)} $clock';
               return Column(
                 children: [
-                  Padding(
-                    padding: const EdgeInsets.all(8),
-                    child: Text(
-                      label,
-                      key: const ValueKey('bot-message-time'),
-                      style: MobileTheme.metaStyleOf(context),
-                    ),
+                  ChatTimeLine(
+                    sentAt,
+                    key: const ValueKey('bot-message-time'),
+                    state: widget.state,
                   ),
                   message,
                 ],

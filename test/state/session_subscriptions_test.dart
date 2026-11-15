@@ -56,6 +56,46 @@ class Harness {
 }
 
 void main() {
+  testWidgets('刷新失败后在同一条连接上退避重试，成功后清掉错误', (tester) async {
+    final h = Harness();
+    addTearDown(h.subscriptions.dispose);
+    final ready = h.subscriptions.retain('desktop', 'session');
+    h.opens.single.completeError(TimeoutException('合成超时'));
+    await ready.catchError((Object _) {});
+    final buffer = h.subscriptions.buffer('desktop', 'session');
+    expect(buffer.error, isNotNull);
+    expect(buffer.loading, isFalse);
+
+    await tester.pump(const Duration(seconds: 2));
+    await tester.pump();
+    expect(h.opens, hasLength(2));
+    h.opens.last.complete(snapshot([1, 2]));
+    await tester.pump();
+    expect(buffer.error, isNull);
+    expect(buffer.items, [1, 2]);
+
+    await tester.pump(const Duration(seconds: 10));
+    expect(h.opens, hasLength(2));
+  });
+
+  testWidgets('重试三次仍失败就停手，错误留给人手动重试', (tester) async {
+    final h = Harness();
+    addTearDown(h.subscriptions.dispose);
+    final ready = h.subscriptions.retain('desktop', 'session');
+    h.opens.single.completeError(TimeoutException('合成超时'));
+    await ready.catchError((Object _) {});
+    for (final wait in [2, 4, 8]) {
+      await tester.pump(Duration(seconds: wait));
+      await tester.pump();
+      h.opens.last.completeError(TimeoutException('合成超时'));
+      await tester.pump();
+    }
+    expect(h.opens, hasLength(4));
+    await tester.pump(const Duration(seconds: 30));
+    expect(h.opens, hasLength(4));
+    expect(h.subscriptions.buffer('desktop', 'session').error, isNotNull);
+  });
+
   test('连续连接恢复时复用完整基线，不再打开快照', () async {
     final h = Harness();
     addTearDown(h.subscriptions.dispose);

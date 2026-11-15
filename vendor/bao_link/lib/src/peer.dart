@@ -146,6 +146,13 @@ class LinkPeer {
     if (LinkMethods.bulk.contains(method)) {
       return _callOnStream(method, params, timeout);
     }
+    if (method == LinkMethods.open && params['have'] == null) {
+      if ((mirror, params['session']) case (final mirror?, final String id)) {
+        if (mirror.have(id) case final have?) {
+          params = {...params, 'have': have};
+        }
+      }
+    }
     final id = _nextId++;
     final pending = _pending[id] = _Pending(method, params);
     if (method == LinkMethods.close && params['session'] is String) {
@@ -268,12 +275,17 @@ class LinkPeer {
         // caller gets to the answer; and told the app in that order too,
         // among the updates (which it would otherwise get to first, or
         // after, as it happens).
+        var result = message['r'];
         if (mirror case final mirror?) {
-          if (_mirrorAnswer(mirror, pending, message['r']) case final event?) {
+          if (_mirrorAnswer(mirror, pending, result) case final event?) {
             _events.add(event);
+            if (pending.method == LinkMethods.open) {
+              // Never return the unnormalised start>0 answer to the app.
+              result = event.name == LinkEvents.session ? event.data : null;
+            }
           }
         }
-        pending.completer.complete(message['r']);
+        pending.completer.complete(result);
     }
   }
 
@@ -285,9 +297,18 @@ class LinkPeer {
     Object? result,
   ) {
     switch ((pending.method, result)) {
-      case (LinkMethods.open, final Map<String, Object?> update):
-        mirror.opened(update);
-        return LinkEvent(LinkEvents.session, update);
+      case (LinkMethods.open, _):
+        final session = pending.params['session'];
+        // A missing/misdirected answer invalidates the requested baseline,
+        // not another session named by a malformed response.
+        final update = result is Map<String, Object?> &&
+                result['session'] == session
+            ? result
+            : <String, Object?>{'session': session};
+        return switch (mirror.opened(update)) {
+          final whole? => LinkEvent(LinkEvents.session, whole),
+          null => LinkEvent(LinkEvents.resync, {'session': session}),
+        };
       case (LinkMethods.earlier, {'items': final List<Object?> items}):
         if (pending.params['session'] case final String session) {
           mirror.earlier(session, items);

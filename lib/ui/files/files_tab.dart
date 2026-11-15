@@ -17,6 +17,7 @@ import '../conversations/project_actions.dart';
 import '../devices/device_menu.dart';
 import '../widgets/lucide_icon.dart';
 import '../widgets/mobile_widgets.dart';
+import '../widgets/pull_refresh.dart';
 import '../widgets/bottom_sheet_panel.dart';
 import '../widgets/dropdown_panel.dart';
 import 'file_source_view.dart';
@@ -56,7 +57,11 @@ class _FilesTabState extends State<FilesTab> {
                 ),
                 icon: Icons.folder_outlined,
               )
-            : ListView(children: _desktop(context, desktop)),
+            : PullRefresh(
+                onArmed: state.haptic,
+                onRefresh: () => state.refreshDesktop(desktop.id),
+                child: ListView(children: _desktop(context, desktop)),
+              ),
       );
     },
   );
@@ -140,8 +145,8 @@ class _FilesPageState extends State<FilesPage> {
     _load();
   }
 
-  void _load() {
-    final listing = widget.listing == null
+  void _load({bool fresh = false}) {
+    final listing = widget.listing == null || fresh
         ? widget.state
               .request(widget.project.desktopId, LinkMethods.files, {
                 'project': widget.project.project.id,
@@ -194,272 +199,265 @@ class _FilesPageState extends State<FilesPage> {
               ? widget.project.project.name
               : widget.prefix.split('/').where((part) => part.isNotEmpty).last,
         ),
-        actions: [
-          if (widget.prefix.isEmpty)
-            IconButton(
-              icon: const LucideIcon('refresh-cw', size: 20),
-              onPressed: () => setState(_load),
-            ),
-        ],
       ),
-      body: Column(
-        children: [
-          SearchCapsule(
-            state: state,
-            hint: state.tr('转到文件', 'Go to file'),
-            onChanged: (text) => setState(() => _query = text),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 12, 8),
-            child: Row(
-              children: [
-                Expanded(
-                  child: widget.prefix.isEmpty
-                      ? const SizedBox.shrink()
-                      : Text(
-                          [
-                            widget.project.project.name,
-                            ...widget.prefix
-                                .split('/')
-                                .where((part) => part.isNotEmpty),
-                          ].join(' › '),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(color: Theme.of(context).hintColor),
-                        ),
-                ),
-                Container(
-                  key: const ValueKey('file-view-switch'),
-                  padding: const EdgeInsets.all(3),
-                  decoration: BoxDecoration(
-                    color: Theme.of(context)
-                        .colorScheme
-                        .surfaceContainerHighest,
-                    borderRadius: BorderRadius.circular(MobileSizes.radius),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      for (final grid in [false, true])
-                        Container(
-                          key: ValueKey(
-                            grid ? 'file-grid-option' : 'file-list-option',
-                          ),
-                          decoration: BoxDecoration(
-                            color: _grid == grid
-                                ? segmentThumbColor(context)
-                                : Colors.transparent,
-                            borderRadius: BorderRadius.circular(9),
-                          ),
-                          child: IconButton(
-                            isSelected: _grid == grid,
-                            tooltip: grid
-                                ? state.tr('网格视图', 'Grid view')
-                                : state.tr('列表视图', 'List view'),
-                            onPressed: () => setState(() => _grid = grid),
-                            icon: LucideIcon(
-                              grid ? 'layout-grid' : 'list',
-                              size: 20,
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-              ],
+      body: PullRefresh(
+        onArmed: state.haptic,
+        onRefresh: () {
+          setState(() => _load(fresh: true));
+          return _listing;
+        },
+        header: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SearchCapsule(
+              state: state,
+              hint: state.tr('转到文件', 'Go to file'),
+              onChanged: (text) => setState(() => _query = text),
             ),
-          ),
-          Expanded(
-            child: FutureBuilder<Map<String, Object?>>(
-              future: _listing,
-              builder: (context, snapshot) {
-                if (snapshot.hasError) {
-                  return EmptyPanel(
-                    userMessage(state, snapshot.error),
-                    actionLabel: state.tr('重试', 'Retry'),
-                    onAction: () => setState(_load),
-                  );
-                }
-                if (!snapshot.hasData) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-                final listing = snapshot.data!;
-                final paths = ((listing['paths'] as List?) ?? [])
-                    .whereType<String>();
-                final changes = objectMap(listing['changes']);
-                final names = <String, bool>{};
-                for (final path in paths) {
-                  if (_query.isNotEmpty) {
-                    if (path.toLowerCase().contains(_query.toLowerCase())) {
-                      names[path] = false;
-                    }
-                  } else if (path.startsWith(widget.prefix)) {
-                    final relative = path.substring(widget.prefix.length);
-                    if (relative.isEmpty) continue;
-                    final slash = relative.indexOf('/');
-                    names[slash < 0 ? relative : relative.substring(0, slash)] =
-                        slash >= 0;
-                  }
-                }
-                // 只在磁盘上有的，灰着显示。
-                final ignored = <String>{};
-                if (_query.isEmpty) {
-                  final disk = objectMap(listing['disk']);
-                  for (final (key, directory) in const [
-                    ('folders', true),
-                    ('files', false),
-                  ]) {
-                    for (final name
-                        in ((disk[key] as List?) ?? const [])
-                            .whereType<String>()) {
-                      if (names.containsKey(name)) continue;
-                      names[name] = directory;
-                      ignored.add(name);
-                    }
-                  }
-                }
-                final entries = names.entries.toList()
-                  ..sort((a, b) {
-                    if (a.value != b.value) return a.value ? -1 : 1;
-                    return a.key.toLowerCase().compareTo(b.key.toLowerCase());
-                  });
-                final directChildren = <String, Set<String>>{};
-                for (final path in paths) {
-                  if (!path.startsWith(widget.prefix)) continue;
-                  final relative = path.substring(widget.prefix.length);
-                  final slash = relative.indexOf('/');
-                  if (slash > 0) {
-                    final directory = relative.substring(0, slash);
-                    final child = relative
-                        .substring(slash + 1)
-                        .split('/')
-                        .first;
-                    if (child.isNotEmpty) {
-                      (directChildren[directory] ??= {}).add(child);
-                    }
-                  }
-                }
-                final directChildCounts = directChildren.map(
-                  (name, children) => MapEntry(name, children.length),
-                );
-                final truncated = listing['truncated'] == true;
-                final entryWidgets = [
-                  for (final entry in entries)
-                    _grid
-                        ? InkWell(
-                            onTap: () => _openEntry(
-                              context,
-                              state,
-                              listing,
-                              entry.key,
-                              entry.value,
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 12, 8),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: widget.prefix.isEmpty
+                        ? const SizedBox.shrink()
+                        : Text(
+                            [
+                              widget.project.project.name,
+                              ...widget.prefix
+                                  .split('/')
+                                  .where((part) => part.isNotEmpty),
+                            ].join(' › '),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: Theme.of(context).hintColor,
                             ),
-                            child: Opacity(
-                              opacity: ignored.contains(entry.key)
-                                  ? _ignoredOpacity
-                                  : 1,
-                              child: Padding(
-                                padding: const EdgeInsets.all(12),
-                                child: Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    entry.value
-                                        ? material_icons.FolderIcon(
-                                            entry.key,
-                                            size: 42,
-                                          )
-                                        : material_icons.FileIcon(
-                                            entry.key,
-                                            size: 42,
-                                          ),
-                                    const SizedBox(height: 8),
-                                    Text(
-                                      entry.key,
-                                      maxLines: 2,
-                                      overflow: TextOverflow.ellipsis,
-                                      textAlign: TextAlign.center,
-                                    ),
-                                    if (entry.value &&
-                                        !truncated &&
-                                        directChildCounts.containsKey(
-                                          entry.key,
-                                        ))
-                                      Text(
-                                        '${directChildCounts[entry.key]} ${state.tr('项', 'items')}',
-                                      ),
-                                  ],
-                                ),
+                          ),
+                  ),
+                  Container(
+                    key: const ValueKey('file-view-switch'),
+                    padding: const EdgeInsets.all(3),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context)
+                          .colorScheme
+                          .surfaceContainerHighest,
+                      borderRadius: BorderRadius.circular(MobileSizes.radius),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        for (final grid in [false, true])
+                          Container(
+                            key: ValueKey(
+                              grid ? 'file-grid-option' : 'file-list-option',
+                            ),
+                            decoration: BoxDecoration(
+                              color: _grid == grid
+                                  ? segmentThumbColor(context)
+                                  : Colors.transparent,
+                              borderRadius: BorderRadius.circular(9),
+                            ),
+                            child: IconButton(
+                              isSelected: _grid == grid,
+                              tooltip: grid
+                                  ? state.tr('网格视图', 'Grid view')
+                                  : state.tr('列表视图', 'List view'),
+                              onPressed: () => setState(() => _grid = grid),
+                              icon: LucideIcon(
+                                grid ? 'layout-grid' : 'list',
+                                size: 20,
                               ),
                             ),
-                          )
-                        : _FileRow(
-                            name: entry.key,
-                            directory: entry.value,
-                            ignored: ignored.contains(entry.key),
-                            count: entry.value && !truncated
-                                ? directChildCounts[entry.key]
-                                : null,
-                            change: entry.value
-                                ? null
-                                : changes[_query.isEmpty
-                                          ? '${widget.prefix}${entry.key}'
-                                          : entry.key]
-                                      as String?,
-                            tr: state.tr,
-                            onTap: () => _openEntry(
-                              context,
-                              state,
-                              listing,
-                              entry.key,
-                              entry.value,
-                            ),
                           ),
-                ];
-                final listingView = _grid
-                    ? GridView.builder(
-                        gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
-                          maxCrossAxisExtent: 160,
-                          mainAxisExtent:
-                              42 +
-                              8 +
-                              24 +
-                              MediaQuery.textScalerOf(context).scale(15) *
-                                  1.4 *
-                                  3,
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        child: FutureBuilder<Map<String, Object?>>(
+          future: _listing,
+          builder: (context, snapshot) {
+            if (snapshot.hasError) {
+              return EmptyPanel(
+                userMessage(state, snapshot.error),
+                actionLabel: state.tr('重试', 'Retry'),
+                onAction: () => setState(_load),
+              );
+            }
+            if (!snapshot.hasData) {
+              return const Center(child: CircularProgressIndicator());
+            }
+            final listing = snapshot.data!;
+            final paths = ((listing['paths'] as List?) ?? [])
+                .whereType<String>();
+            final changes = objectMap(listing['changes']);
+            final names = <String, bool>{};
+            for (final path in paths) {
+              if (_query.isNotEmpty) {
+                if (path.toLowerCase().contains(_query.toLowerCase())) {
+                  names[path] = false;
+                }
+              } else if (path.startsWith(widget.prefix)) {
+                final relative = path.substring(widget.prefix.length);
+                if (relative.isEmpty) continue;
+                final slash = relative.indexOf('/');
+                names[slash < 0 ? relative : relative.substring(0, slash)] =
+                    slash >= 0;
+              }
+            }
+            // 只在磁盘上有的，灰着显示。
+            final ignored = <String>{};
+            if (_query.isEmpty) {
+              final disk = objectMap(listing['disk']);
+              for (final (key, directory) in const [
+                ('folders', true),
+                ('files', false),
+              ]) {
+                for (final name
+                    in ((disk[key] as List?) ?? const []).whereType<String>()) {
+                  if (names.containsKey(name)) continue;
+                  names[name] = directory;
+                  ignored.add(name);
+                }
+              }
+            }
+            final entries = names.entries.toList()
+              ..sort((a, b) {
+                if (a.value != b.value) return a.value ? -1 : 1;
+                return a.key.toLowerCase().compareTo(b.key.toLowerCase());
+              });
+            final directChildren = <String, Set<String>>{};
+            for (final path in paths) {
+              if (!path.startsWith(widget.prefix)) continue;
+              final relative = path.substring(widget.prefix.length);
+              final slash = relative.indexOf('/');
+              if (slash > 0) {
+                final directory = relative.substring(0, slash);
+                final child = relative.substring(slash + 1).split('/').first;
+                if (child.isNotEmpty) {
+                  (directChildren[directory] ??= {}).add(child);
+                }
+              }
+            }
+            final directChildCounts = directChildren.map(
+              (name, children) => MapEntry(name, children.length),
+            );
+            final truncated = listing['truncated'] == true;
+            final entryWidgets = [
+              for (final entry in entries)
+                _grid
+                    ? InkWell(
+                        onTap: () => _openEntry(
+                          context,
+                          state,
+                          listing,
+                          entry.key,
+                          entry.value,
                         ),
-                        itemCount: entryWidgets.length,
-                        itemBuilder: (context, index) => entryWidgets[index],
-                      )
-                    : ListView(children: entryWidgets);
-                return Column(
-                  children: [
-                    if (truncated)
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                        child: Align(
-                          alignment: Alignment.centerLeft,
-                          child: Text(
-                            state.tr(
-                              '文件列表达到上限，未列出所有文件。',
-                              'The file listing reached its limit.',
+                        child: Opacity(
+                          opacity: ignored.contains(entry.key)
+                              ? _ignoredOpacity
+                              : 1,
+                          child: Padding(
+                            padding: const EdgeInsets.all(12),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                entry.value
+                                    ? material_icons.FolderIcon(
+                                        entry.key,
+                                        size: 42,
+                                      )
+                                    : material_icons.FileIcon(
+                                        entry.key,
+                                        size: 42,
+                                      ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  entry.key,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  textAlign: TextAlign.center,
+                                ),
+                                if (entry.value &&
+                                    !truncated &&
+                                    directChildCounts.containsKey(entry.key))
+                                  Text(
+                                    '${directChildCounts[entry.key]} ${state.tr('项', 'items')}',
+                                  ),
+                              ],
                             ),
                           ),
+                        ),
+                      )
+                    : _FileRow(
+                        name: entry.key,
+                        directory: entry.value,
+                        ignored: ignored.contains(entry.key),
+                        count: entry.value && !truncated
+                            ? directChildCounts[entry.key]
+                            : null,
+                        change: entry.value
+                            ? null
+                            : changes[_query.isEmpty
+                                      ? '${widget.prefix}${entry.key}'
+                                      : entry.key]
+                                  as String?,
+                        tr: state.tr,
+                        onTap: () => _openEntry(
+                          context,
+                          state,
+                          listing,
+                          entry.key,
+                          entry.value,
                         ),
                       ),
-                    Expanded(
-                      child: entries.isEmpty
-                          ? EmptyPanel(
-                              state.tr('没有文件', 'No files'),
-                              icon: Icons.folder_open_outlined,
-                            )
-                          : listingView,
+            ];
+            final listingView = _grid
+                ? GridView.builder(
+                    gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
+                      maxCrossAxisExtent: 160,
+                      mainAxisExtent:
+                          42 +
+                          8 +
+                          24 +
+                          MediaQuery.textScalerOf(context).scale(15) * 1.4 * 3,
                     ),
-                  ],
-                );
-              },
-            ),
-          ),
-        ],
+                    itemCount: entryWidgets.length,
+                    itemBuilder: (context, index) => entryWidgets[index],
+                  )
+                : ListView(children: entryWidgets);
+            return Column(
+              children: [
+                if (truncated)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        state.tr(
+                          '文件列表达到上限，未列出所有文件。',
+                          'The file listing reached its limit.',
+                        ),
+                      ),
+                    ),
+                  ),
+                Expanded(
+                  child: entries.isEmpty
+                      ? EmptyPanel(
+                          state.tr('没有文件', 'No files'),
+                          icon: Icons.folder_open_outlined,
+                        )
+                      : listingView,
+                ),
+              ],
+            );
+          },
+        ),
       ),
     );
   }
@@ -1319,6 +1317,12 @@ class _DiffViewState extends State<DiffView> {
     for (final height in _heights) {
       _offsets.add(_offsets.last + height);
     }
+    // 宽度、字号变了行高跟着变：还停在某处时重新对准它，不让它漂走。
+    if (_at.value case (change: final change, exact: true) when change >= 0) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _at.value == (change: change, exact: true)) _go(change);
+      });
+    }
   }
 
   TextPainter _painter(String text) => TextPainter(
@@ -1353,11 +1357,16 @@ class _DiffViewState extends State<DiffView> {
   }
 
   // 文件末尾几处改动的落点会重合，所以按钮跳转时不从位置反推序号。
+  // 改动开头进了屏幕上半截就算到了它，不必刚好停在落点上。
   void _follow() {
     if (_stepping || _starts.isEmpty) return;
-    final pixels = _scroll.position.pixels;
+    final position = _scroll.position;
+    final pixels = position.pixels;
+    final reached = pixels + position.viewportDimension / 2;
     var change = -1;
-    while (change + 1 < _starts.length && _stop(change + 1) <= pixels + 1) {
+    while (change + 1 < _starts.length &&
+        (_offsets[_starts[change + 1]] <= reached ||
+            _stop(change + 1) <= pixels + 1)) {
       change++;
     }
     _at.value = (

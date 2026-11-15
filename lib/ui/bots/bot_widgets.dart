@@ -91,6 +91,142 @@ Future<bool> _deleteBot(
   return true;
 }
 
+/// 消息数挂在头像右上角，和对话列表里的 Bot、项目一个样子。
+Widget unreadAvatar(int unread, Widget avatar) => Badge(
+  isLabelVisible: unread > 0,
+  label: Text('$unread'),
+  offset: const Offset(6, -6),
+  child: avatar,
+);
+
+class GroupPressRow extends StatelessWidget {
+  const GroupPressRow({
+    super.key,
+    required this.state,
+    required this.ref,
+    required this.child,
+  });
+  final AppState state;
+  final GroupRef ref;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final pinned = state.groupPinned(ref);
+    return PressMenuRow(
+      items: [
+        PressMenuItem(
+          pinned ? state.tr('取消置顶', 'Unpin') : state.tr('置顶', 'Pin'),
+          () => runUi(context, () => state.setGroupPinned(ref, !pinned)),
+        ),
+        PressMenuItem(
+          state.tr('聊天信息', 'Chat info'),
+          () => openPage<void>(
+            context,
+            GroupInfoPage(
+              state: state,
+              desktop: ref.desktopId,
+              group: ref.group,
+            ),
+          ),
+        ),
+        if (state.isOnline(ref.desktopId))
+          PressMenuItem(
+            state.tr('删除群聊', 'Delete group'),
+            () => runUi(
+              context,
+              () => deleteGroup(context, state, ref.desktopId, ref.group),
+            ),
+          ),
+      ],
+      child: child,
+    );
+  }
+}
+
+/// 群的成员头像拼在一起：四个以内两列，再多三列，不满的一行在上、居中。
+class GroupAvatar extends StatelessWidget {
+  const GroupAvatar({
+    super.key,
+    required this.state,
+    required this.ref,
+    this.size = MobileSizes.avatar,
+  });
+  final AppState state;
+  final GroupRef ref;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    final members = [
+      for (final id in ref.group.members) ?state.botOn(ref.desktopId, id),
+    ];
+    final radius = BorderRadius.circular(size * MobileSizes.avatarCorner);
+    if (members.isEmpty) {
+      return Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          borderRadius: radius,
+          color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        ),
+        child: Icon(
+          Icons.groups_outlined,
+          size: size * .56,
+          color: Theme.of(context).colorScheme.onSurfaceVariant,
+        ),
+      );
+    }
+    final shown = members.take(9).toList();
+    final cols = shown.length <= 4 ? 2 : 3;
+    final gap = size * .04;
+    const padding = .06;
+    final cell = (size * (1 - 2 * padding) - (cols - 1) * gap) / cols;
+    final rows = <List<Widget>>[
+      for (var i = 0; i < shown.length; i += cols)
+        [
+          for (final member in shown.skip(i).take(cols))
+            ClipRRect(
+              borderRadius: BorderRadius.circular(
+                cell * MobileSizes.avatarCorner,
+              ),
+              child: BotAvatar(state: state, ref: member, size: cell),
+            ),
+        ],
+    ];
+    // 不满的一行放到最上面，像微信的群头像。
+    if (rows.length > 1 && rows.last.length < cols) {
+      rows.insert(0, rows.removeLast());
+    }
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        borderRadius: radius,
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+      ),
+      padding: EdgeInsets.all(size * padding),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          for (var i = 0; i < rows.length; i++) ...[
+            if (i > 0) SizedBox(height: gap),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                for (var j = 0; j < rows[i].length; j++) ...[
+                  if (j > 0) SizedBox(width: gap),
+                  rows[i][j],
+                ],
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
 /// 最近说的一句，没聊过时是签名；身份设定是写给模型的，不露出来。
 String? _botListLine(LinkBot bot) => switch (bot.last) {
   final last? when last.isNotEmpty => last,
@@ -199,34 +335,44 @@ String _abilityTitle(AppState state, BotAbility ability) => switch (ability) {
 
 String _abilityDetail(AppState state, BotAbility ability) => switch (ability) {
   BotAbility.agents => state.tr(
-    '查看、停止、重试、归档对话，代你发消息、新建对话',
-    'View, stop, retry and archive chats; message and open chats for you',
+    '查看、停止、重试和归档对话，代你发消息或新建对话',
+    'View, stop, retry and archive chats; message or start chats for you',
   ),
   BotAbility.browser => state.tr(
-    '像对话任务一样操作你的浏览器',
-    'Drive your browser like a chat task',
+    '在你的浏览器里打开网页、读取和操作',
+    'Open, read and act on pages in your browser',
   ),
   // The desktop's WATCH.md rules: some wake the model, some only notify
   // the phone or are only noted.
   BotAbility.proactive => state.tr(
-    '对话在等你、出错，或它派的对话有进展时告诉它，由它决定要不要找你；它也能改成只记下，或直接通知你、不用模型。关掉后一条都不告诉它',
-    'Hears when a chat waits, fails, or one it started moves on, and decides whether to reach you; it can also just note one, or notify you without using the model. Off, it hears nothing',
+    '对话等你、出错或有进展时告诉它，由它决定是否找你；有的只记下，或不经模型直接通知你。关闭后不再告诉它',
+    'Told when a chat waits, fails or moves on, it decides whether to reach you; some are only noted, or sent to you without the model. Off, it is told nothing',
   ),
 };
 
-String _modeNote(AppState state) => state.tr(
-  '关掉后它能读写文件、运行命令，在你们聊到的项目里自己动手，或派给 Agent；每轮会多带一万多 token 的工具说明。',
-  'Off, it can read and write files and run commands in the projects you talk about, or hand work to an agent; each turn carries 10K+ tokens of tool descriptions.',
+String _modeNote(AppState state, bool chatOnly) => chatOnly
+    ? state.tr('只聊天，不读写文件、不运行命令。', 'Chat only: no files, no commands.')
+    : state.tr(
+        '可读写文件、运行命令，或把任务交给智能体；每轮约多用 1 万 token。',
+        'Can read and write files, run commands, or hand work to an agent; about 10K more tokens per turn.',
+      );
+
+String _writesFirstNote(AppState state) =>
+    state.tr('有事时主动给你发消息。', 'Messages you first when something comes up.');
+
+String _suggestionsNote(AppState state) => state.tr(
+  '每次回复后在输入框上方给出几句备选：点击直接发送，长按先编辑。',
+  'After each reply, a few options appear above the composer: tap to send, long-press to edit first.',
 );
 
 String _identityNote(AppState state) => state.tr(
-  '它是谁、怎么说话、和你是什么关系，都由你来写。',
-  'Who it is, how it talks, and your relationship — all up to you.',
+  '它是谁，和你是什么关系。',
+  'Who it is and how it relates to you.',
 );
 
 String _styleNote(AppState state) => state.tr(
-  '它的语气、口头禅、用不用表情。',
-  'Its tone, catchphrases, whether it uses emoji.',
+  '语气、口头禅、是否用表情。',
+  'Tone, catchphrases, whether it uses emoji.',
 );
 
 String _limitsNote(AppState state) => state.tr(
@@ -247,7 +393,7 @@ Future<bool> _confirmComputerTools(BuildContext context, AppState state) =>
     );
 
 /// The app bar's compact action (at most 40 high), in the theme's color.
-Widget _doneButton(AppState state, VoidCallback? onPressed) => Padding(
+Widget doneButton(AppState state, VoidCallback? onPressed) => Padding(
   padding: const EdgeInsets.only(right: 12),
   child: Center(
     child: FilledButton(
@@ -355,11 +501,11 @@ class _AbilityTile extends StatelessWidget {
   final bool value;
   final ValueChanged<bool>? onChanged;
   @override
-  Widget build(BuildContext context) => SwitchListTile(
-    key: ValueKey('bot-ability-${ability.name}'),
-    secondary: LucideIcon(_abilityIcon(ability), size: 22),
-    title: Text(_abilityTitle(state, ability)),
-    subtitle: Text(_abilityDetail(state, ability)),
+  Widget build(BuildContext context) => _SwitchTile(
+    tileKey: ValueKey('bot-ability-${ability.name}'),
+    icon: _abilityIcon(ability),
+    title: _abilityTitle(state, ability),
+    detail: _abilityDetail(state, ability),
     value: value,
     onChanged: onChanged,
   );
@@ -375,17 +521,44 @@ class _ModeTile extends StatelessWidget {
   final bool value;
   final ValueChanged<bool>? onChanged;
   @override
-  Widget build(BuildContext context) => SwitchListTile(
-    key: const ValueKey('bot-chat-only'),
-    secondary: const LucideIcon('message-circle', size: 22),
-    title: Text(state.tr('只聊天', 'Chat only')),
+  Widget build(BuildContext context) => _SwitchTile(
+    tileKey: const ValueKey('bot-chat-only'),
+    icon: 'message-circle',
+    title: state.tr('只聊天', 'Chat only'),
     value: value,
     onChanged: onChanged,
   );
 }
 
-/// When a bot told of agents may write first: how often, and the hours
-/// it keeps quiet.
+/// A card row: an icon, a title, an optional grey line under it, a switch.
+class _SwitchTile extends StatelessWidget {
+  const _SwitchTile({
+    required this.icon,
+    required this.title,
+    required this.value,
+    required this.onChanged,
+    this.detail,
+    this.tileKey,
+  });
+  final String icon, title;
+  final String? detail;
+  final bool value;
+  final ValueChanged<bool>? onChanged;
+
+  /// On the SwitchListTile itself: tests find the row by it and read the switch.
+  final Key? tileKey;
+
+  @override
+  Widget build(BuildContext context) => SwitchListTile(
+    key: tileKey,
+    secondary: LucideIcon(icon, size: 22),
+    title: Text(title),
+    subtitle: detail == null ? null : Text(detail!),
+    value: value,
+    onChanged: onChanged,
+  );
+}
+
 /// 性别是选的，点开不弹键盘；以前手写的值留作一项，不会被改掉。
 Future<String?> _pickGender(
   BuildContext anchor,
@@ -404,20 +577,23 @@ Future<String?> _pickGender(
   ], width: 160);
 }
 
-class _LongTextPage extends StatefulWidget {
-  const _LongTextPage({
+class LongTextPage extends StatefulWidget {
+  const LongTextPage({
+    super.key,
     required this.state,
     required this.title,
     required this.value,
     required this.note,
+    this.hint,
   });
   final AppState state;
   final String title, value, note;
+  final String? hint;
   @override
-  State<_LongTextPage> createState() => _LongTextPageState();
+  State<LongTextPage> createState() => _LongTextPageState();
 }
 
-class _LongTextPageState extends State<_LongTextPage> {
+class _LongTextPageState extends State<LongTextPage> {
   late final _text = TextEditingController(text: widget.value);
 
   @override
@@ -431,7 +607,7 @@ class _LongTextPageState extends State<_LongTextPage> {
     appBar: AppBar(
       title: Text(widget.title),
       actions: [
-        _doneButton(
+        doneButton(
           widget.state,
           () => Navigator.pop(context, _text.text.trim()),
         ),
@@ -443,7 +619,7 @@ class _LongTextPageState extends State<_LongTextPage> {
         _InputCard(
           fieldKey: const ValueKey('bot-long-text'),
           controller: _text,
-          hint: widget.state.tr('还没写', 'Not written yet'),
+          hint: widget.hint ?? widget.state.tr('还没写', 'Not written yet'),
           minLines: 6,
           autofocus: true,
         ),

@@ -14,6 +14,9 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.PowerManager
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.os.VibratorManager
 import android.provider.Settings
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
@@ -58,6 +61,7 @@ class PlatformBridge(
     private val localDiscovery = LocalDiscovery(appContext, main)
     private val chatClipboard = ChatClipboard(appContext)
     private val updates = AndroidUpdates(appContext) { activity }
+    private val uploadPicker = UploadDocumentPicker(appContext, main) { activity }
 
     init {
         methods.setMethodCallHandler(this)
@@ -71,6 +75,7 @@ class PlatformBridge(
         }
         try {
             if (updates.handle(call, result)) return
+            if (uploadPicker.handle(call, result)) return
             when (call.method) {
                 "secureRead" -> {
                     val key = requiredString(call, "key")
@@ -237,6 +242,7 @@ class PlatformBridge(
     }
 
     fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?): Boolean {
+        if (uploadPicker.onActivityResult(requestCode, resultCode, data)) return true
         if (requestCode == SAVE_DOCUMENT) {
             val result = exportResult ?: return true
             val bytes = exportBytes
@@ -283,6 +289,22 @@ class PlatformBridge(
     }
 
     private fun haptic(kind: String?) {
+        val activity = requireActivity()
+        // 视图触感反馈太轻，很多手机还跟着系统开关静音：有马达就直接用预设震动。
+        val vibrator = if (Build.VERSION.SDK_INT >= 31) {
+            activity.getSystemService(VibratorManager::class.java)?.defaultVibrator
+        } else {
+            @Suppress("DEPRECATION") activity.getSystemService(Vibrator::class.java)
+        }
+        if (Build.VERSION.SDK_INT >= 29 && vibrator?.hasVibrator() == true) {
+            val effect = when (kind) {
+                "selection", "light" -> VibrationEffect.EFFECT_CLICK
+                "warning", "error" -> VibrationEffect.EFFECT_DOUBLE_CLICK
+                else -> VibrationEffect.EFFECT_HEAVY_CLICK
+            }
+            vibrator.vibrate(VibrationEffect.createPredefined(effect))
+            return
+        }
         val feedback = when (kind) {
             "selection", "light" -> HapticFeedbackConstants.CLOCK_TICK
             "heavy", "error" -> HapticFeedbackConstants.LONG_PRESS
@@ -292,7 +314,10 @@ class PlatformBridge(
                 else HapticFeedbackConstants.LONG_PRESS
             else -> HapticFeedbackConstants.VIRTUAL_KEY
         }
-        requireActivity().window.decorView.performHapticFeedback(feedback)
+        requireActivity().window.decorView.performHapticFeedback(
+            feedback,
+            @Suppress("DEPRECATION") HapticFeedbackConstants.FLAG_IGNORE_GLOBAL_SETTING,
+        )
     }
 
     private fun batteryUnrestricted(): Boolean {
@@ -378,6 +403,7 @@ class PlatformBridge(
     fun detachActivity(host: FlutterActivity) {
         if (activity !== host) return
         activity = null
+        uploadPicker.cancel()
         exportResult?.error("disposed", "文件保存窗口已关闭，保存结果未确认", null)
         exportResult = null
         exportBytes = null
@@ -396,6 +422,7 @@ class PlatformBridge(
         localDiscovery.close()
         chatClipboard.close()
         updates.close()
+        uploadPicker.close()
         exportResult?.error("disposed", "文件保存窗口已关闭，保存结果未确认", null)
         exportResult = null
         exportBytes = null

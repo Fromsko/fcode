@@ -66,4 +66,22 @@ void main() {
     expect(side(diff, LineChange.added), before);
     expect(side(diff, LineChange.removed), after);
   });
+
+  test('CRLF 的旧内容与 LF 的新内容只标出真正改了的那几行', () {
+    final diff = lineDiff('first\r\nold\r\nlast\r\n', 'first\nnew\nlast\n');
+    expect(
+      [
+        for (final line in diff)
+          (line.kind, line.text, line.before, line.after),
+      ],
+      [
+        (LineChange.context, 'first', 1, 1),
+        (LineChange.removed, 'old', 2, null),
+        (LineChange.added, 'new', null, 2),
+        (LineChange.context, 'last', 3, 3),
+        (LineChange.context, '', 4, 4),
+      ],
+    );
+    expect(changeStarts(diff), [1]);
+  });
 }

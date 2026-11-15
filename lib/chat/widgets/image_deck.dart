@@ -85,6 +85,8 @@ class _ImageDeckState extends State<ImageDeck> {
           alignment: Alignment.topCenter,
           gaplessPlayback: true,
           semanticLabel: widget.images[index].name,
+          // 缩略图按屏幕像素解码，不把整张原图留在内存里。
+          cacheWidth: (width * MediaQuery.devicePixelRatioOf(context)).round(),
         ),
       ),
     );

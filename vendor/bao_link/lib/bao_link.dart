@@ -5,6 +5,7 @@
 library;
 
 export 'src/bots.dart';
+export 'src/groups.dart';
 export 'src/connection.dart';
 export 'src/discovery.dart';
 export 'src/identity.dart';

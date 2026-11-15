@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:bao_link/bao_link.dart' show LinkLimits;
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:gal/gal.dart';
 import 'package:image_picker/image_picker.dart';
 
@@ -69,23 +70,45 @@ Future<({Uint8List bytes, String type})?> pickAvatar(
   return (bytes: bytes, type: file.mimeType ?? 'image/jpeg');
 }
 
-Future<T?> openPage<T>(BuildContext context, Widget page) {
-  // 否则返回时焦点回到聊天输入框，键盘会再弹出来；草稿和光标不受影响。
-  FocusManager.instance.primaryFocus?.unfocus();
-  return Navigator.of(context).push<T>(MaterialPageRoute(builder: (_) => page));
+Future<T?> openPage<T>(BuildContext context, Widget page) =>
+    Navigator.of(context).push<T>(MaterialPageRoute(builder: (_) => page));
+
+/// 页面、弹窗、底部面板盖上来时放掉输入框的焦点。Flutter 关上它们会把焦点
+/// 还给原来的输入框，键盘跟着焦点自己弹出来；在这里统一放掉，各处不用再管。
+/// 草稿和光标不受影响；不抢焦点的弹出层（如开着键盘选模型）不动它。
+class ReleaseInputOnCover extends NavigatorObserver {
+  @override
+  void didPush(Route<dynamic> route, Route<dynamic>? previousRoute) {
+    // 这时新页面还没拿到焦点（下一个微任务才给），放掉的是底下的输入框。
+    if (!route.requestFocus) return;
+    final focused = FocusManager.instance.primaryFocus;
+    if (focused?.context?.findAncestorStateOfType<EditableTextState>() ==
+        null) {
+      return;
+    }
+    // 放掉才会从底下页面的焦点记录里清掉它；这一步会把焦点要回底下，
+    // 再交还给新页面。
+    focused!.unfocus();
+    if (route is ModalRoute) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        final page = route.subtreeContext;
+        if (page != null && route.isCurrent) FocusScope.of(page).requestFocus();
+      });
+    }
+  }
 }
 
 /// Runs [action] for a control. A failure shows [errorMessage]'s words, never
 /// the exception's own text — pass `(e) => userMessage(state, e)`.
-Future<void> runUi(
+Future<T?> runUi<T>(
   BuildContext context,
-  Future<void> Function() action, {
+  Future<T> Function() action, {
   String Function(Object error)? errorMessage,
 }) async {
   try {
-    await action();
+    return await action();
   } on Object catch (error) {
-    if (!context.mounted) return;
+    if (!context.mounted) return null;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
@@ -101,6 +124,7 @@ Future<void> runUi(
         ),
       ),
     );
+    return null;
   }
 }
 
@@ -328,12 +352,15 @@ class SegmentBar<T> extends StatelessWidget {
 }
 
 class SectionLabel extends StatelessWidget {
-  const SectionLabel(this.text, {super.key, this.inset = 16});
+  const SectionLabel(this.text, {super.key, this.inset = 16, this.top = 20});
   final String text;
   final double inset;
+
+  /// 页面第一段时收小，不在标题栏下空一大块。
+  final double top;
   @override
   Widget build(BuildContext context) => Padding(
-    padding: EdgeInsets.fromLTRB(inset, 20, inset, 8),
+    padding: EdgeInsets.fromLTRB(inset, top, inset, 8),
     child: Align(
       alignment: Alignment.centerLeft,
       child: Text(text, style: MobileTheme.hintStyleOf(context)),
@@ -388,7 +415,8 @@ class EditableSettingsRow extends StatelessWidget {
 /// 卡片下面的一行灰字，说明这块是干什么的。三处页面原来各写一份，
 /// 间距不同；这里按「卡片下方」统一：左边和卡片对齐，上面留一点空。
 class CardNote extends StatelessWidget {
-  const CardNote(this.text, {super.key, this.inset = MobileSpace.md});
+  /// 默认和卡片本身一样从 16 起：灰字不缩进到卡片左边缘外面。
+  const CardNote(this.text, {super.key, this.inset = MobileSpace.lg});
   final String text;
 
   /// 左边距；和所在卡片的左右内边距对齐。
@@ -537,27 +565,55 @@ class PickRow extends StatelessWidget {
     required this.selected,
     required this.onTap,
     this.leading,
+    this.subtitle,
+    this.checkbox = false,
   });
   final String title;
   final bool selected;
   final VoidCallback onTap;
   final Widget? leading;
+  final String? subtitle;
+
+  /// 多选用圆形勾选框，没选也画出来；单选只在选中时打勾。
+  final bool checkbox;
   @override
-  Widget build(BuildContext context) => Semantics(
-    selected: selected,
-    child: ListTile(
-      leading: leading,
-      title: Text(title),
-      trailing: selected
-          ? LucideIcon(
-              'check',
-              size: 20,
-              color: Theme.of(context).colorScheme.primary,
-            )
-          : null,
-      onTap: onTap,
-    ),
-  );
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final subtitle = this.subtitle;
+    return Semantics(
+      selected: selected,
+      child: ListTile(
+        leading: leading,
+        title: subtitle == null
+            ? Text(title)
+            : Text(title, maxLines: 1, overflow: TextOverflow.ellipsis),
+        subtitle: subtitle == null || subtitle.isEmpty
+            ? null
+            : Text(
+                subtitle,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: MobileTheme.hintStyleOf(context),
+              ),
+        trailing: checkbox
+            ? SvgPicture.asset(
+                selected
+                    ? 'assets/icons/checkbox-circle-fill.svg'
+                    : 'assets/icons/checkbox-blank-circle-line.svg',
+                width: 24,
+                height: 24,
+                colorFilter: ColorFilter.mode(
+                  selected ? scheme.primary : scheme.onSurfaceVariant,
+                  BlendMode.srcIn,
+                ),
+              )
+            : selected
+            ? LucideIcon('check', size: 20, color: scheme.primary)
+            : null,
+        onTap: onTap,
+      ),
+    );
+  }
 }
 
 // The same bytes for the same base64, so MemoryImage hits the image cache
@@ -657,6 +713,41 @@ class LetterAvatar extends StatelessWidget {
   }
 }
 
+/// 标题栏左边的图标，别处有等着你的时带个小点（见 [AppState.needsAttentionOn]）。
+class AttentionDot extends StatelessWidget {
+  const AttentionDot({super.key, required this.state, required this.child});
+  final AppState state;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: state,
+    builder: (context, child) => Badge(
+      isLabelVisible: state.needsAttentionOn(state.selectedDesktopId),
+      smallSize: 7,
+      child: child,
+    ),
+    child: child,
+  );
+}
+
+/// 返回键，带 [AttentionDot]：在对话里也看得到别处做完或在等你。
+class AttentionBackButton extends StatelessWidget {
+  const AttentionBackButton({super.key, required this.state, this.icon});
+  final AppState state;
+
+  /// 不给就是系统的返回箭头。
+  final Widget? icon;
+
+  @override
+  Widget build(BuildContext context) => IconButton(
+    key: const ValueKey('attention-back'),
+    tooltip: state.tr('返回', 'Back'),
+    onPressed: () => Navigator.maybePop(context),
+    icon: AttentionDot(state: state, child: icon ?? const BackButtonIcon()),
+  );
+}
+
 /// Beside a status that says it is connecting.
 class ConnectingSpinner extends StatelessWidget {
   const ConnectingSpinner({super.key, this.size = 12, this.color});
@@ -720,10 +811,10 @@ class ListRow extends StatelessWidget {
   final Widget leading;
   final String title;
 
-  /// A tag on the title's line, left of the time (such as “助理”).
+  /// A tag right after the title (such as “助理”).
   final String? note;
 
-  /// Muted, left of [note] and the time: something such as a conversation's
+  /// Muted, left of the time: something such as a conversation's
   /// model. Not a tag — it reads as part of the line, not as a badge.
   final Widget? aside;
   final String? subtitle;
@@ -769,17 +860,27 @@ class ListRow extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          // 右边的模型、标签和时间先排满，标题拿剩下的。
+                          // 右边的模型和时间先排满，标题和标签拿剩下的。
                           Row(
                             children: [
                               Expanded(
-                                child: Text(
-                                  title,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: text.bodyMedium!.copyWith(
-                                    fontWeight: FontWeight.w500,
-                                  ),
+                                child: Row(
+                                  children: [
+                                    Flexible(
+                                      child: Text(
+                                        title,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: text.bodyMedium!.copyWith(
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                    ),
+                                    if (note != null) ...[
+                                      const SizedBox(width: MobileSpace.sm),
+                                      MobileTag(note!),
+                                    ],
+                                  ],
                                 ),
                               ),
                               if (aside != null) ...[
@@ -797,10 +898,6 @@ class ListRow extends StatelessWidget {
                                     child: aside!,
                                   ),
                                 ),
-                              ],
-                              if (note != null) ...[
-                                const SizedBox(width: MobileSpace.sm),
-                                MobileTag(note!),
                               ],
                               if (time != null) ...[
                                 const SizedBox(width: MobileSpace.sm),

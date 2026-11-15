@@ -106,8 +106,8 @@ class DiffLineRow extends StatelessWidget {
 
 /// 差异里的浮动「第几处 / 共几处」条，上下两个按钮跳到别处改动。
 ///
-/// [at] 为 -1 表示还在第一处之前；[exact] 为假表示视口停在某处之后、
-/// 下一处之前，往回走先去那一处。
+/// [at] 为 -1 表示还在第一处之前，计数照样显示 1（往下一步就到它）；
+/// [exact] 为假表示视口停在某处之后、下一处之前，往回走先去那一处。
 class ChangeNavigationBar extends StatelessWidget {
   const ChangeNavigationBar({
     super.key,
@@ -144,7 +144,7 @@ class ChangeNavigationBar extends StatelessWidget {
             icon: const Icon(Icons.keyboard_arrow_up),
           ),
           Text(
-            '${at.at < 0 ? '–' : at.at + 1} / $total',
+            '${at.at < 0 ? 1 : at.at + 1} / $total',
             key: ValueKey('$keyPrefix-change-count'),
             style: theme.textTheme.labelMedium?.copyWith(
               fontFeatures: const [FontFeature.tabularFigures()],

@@ -60,13 +60,14 @@ class _SlowStore extends MemoryLinkStore {
   }
 }
 
-SessionSummary _session(String id, DateTime updatedAt) => SessionSummary(
-  id: id,
-  project: 'p',
-  title: id,
-  updatedAt: updatedAt,
-  unread: true,
-);
+SessionSummary _session(String id, DateTime updatedAt, {bool unread = true}) =>
+    SessionSummary(
+      id: id,
+      project: 'p',
+      title: id,
+      updatedAt: updatedAt,
+      unread: unread,
+    );
 
 void main() {
   test('换到别的上游的模型时记下何时换成了什么，同一个上游里换不记', () async {
@@ -194,6 +195,27 @@ void main() {
       expect(state.sessionUnread(state.sessions.single), isFalse);
     });
 
+    test('正开着的对话在等批准也不算等着你，关掉后才算', () async {
+      final state = _Seen(
+        MemoryLinkStore(),
+        SessionSummary(
+          id: 'a',
+          project: 'p',
+          title: 'a',
+          updatedAt: DateTime(2026),
+          status: LinkSessionStatus.needsInput,
+        ),
+      );
+      addTearDown(state.dispose);
+      await state.initialize();
+      expect(state.awaitingOn('demo-desktop').waiting, 1);
+      await state.openSession('demo-desktop', 'a');
+      expect(state.awaitingOn('demo-desktop').waiting, 0);
+      expect(state.needsAttentionOn('demo-desktop'), isFalse);
+      await state.closeSession('demo-desktop', 'a');
+      expect(state.awaitingOn('demo-desktop').waiting, 1);
+    });
+
     test('同一段对话开着两页，关掉一页仍算正在看', () async {
       final state = _Seen(MemoryLinkStore(), session);
       addTearDown(state.dispose);
@@ -205,6 +227,26 @@ void main() {
       expect(state.sessionUnread(state.sessions.single), isFalse);
       await state.closeSession('demo-desktop', 'a');
       state.current = _session('a', DateTime(2026, 3));
+      expect(state.sessionUnread(state.sessions.single), isTrue);
+    });
+
+    test('断线时看过的，重连后电脑说未读也不再算', () async {
+      final store = MemoryLinkStore();
+      // 断线：电脑那一刻没标未读，手机看到的是一条不算未读的对话。
+      final state = _Seen(store, _session('a', DateTime(2026), unread: false));
+      addTearDown(state.dispose);
+      await state.initialize();
+      await state.openSession('demo-desktop', 'a');
+      await state.closeSession('demo-desktop', 'a');
+      await pumpEventQueue();
+      expect(state.sessionUnread(state.sessions.single), isFalse);
+
+      // 重连：同一段内容，电脑这回说它未读，手机记得看过。
+      state.current = _session('a', DateTime(2026));
+      expect(state.sessionUnread(state.sessions.single), isFalse);
+
+      // 之后真有了新结果，仍然算未读。
+      state.current = _session('a', DateTime(2026, 2));
       expect(state.sessionUnread(state.sessions.single), isTrue);
     });
 

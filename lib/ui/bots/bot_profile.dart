@@ -77,6 +77,7 @@ class _BotProfileViewState extends State<_BotProfileView> {
     String? style,
     Set<BotAbility>? abilities,
     bool? chatOnly,
+    bool? writesFirst,
   }) async {
     if (_saving) return;
     final current = bot;
@@ -97,19 +98,23 @@ class _BotProfileViewState extends State<_BotProfileView> {
     });
     final saver = state.botProfileSaver(desktopId, bot: current);
     try {
-      final saved = await saver.save({
-        'name': current.name,
-        'identity': identity ?? current.identity,
-        'style': style ?? current.style,
-        'signature': current.signature,
-        'gender': gender ?? current.gender,
-        'avatar': current.avatar,
-        'abilities': [
-          for (final ability in abilities ?? current.abilities) ability.name,
-        ],
-        // 电脑端已不看它，只原样带回，保持整份资料。
-        'proactive': current.proactive.toJson(),
-      }, chatOnly: nextChatOnly);
+      final saved = await saver.save(
+        {
+          'name': current.name,
+          'identity': identity ?? current.identity,
+          'style': style ?? current.style,
+          'signature': current.signature,
+          'gender': gender ?? current.gender,
+          'avatar': current.avatar,
+          'abilities': [
+            for (final ability in abilities ?? current.abilities) ability.name,
+          ],
+          // 电脑端已不看它，只原样带回，保持整份资料。
+          'proactive': current.proactive.toJson(),
+        },
+        chatOnly: nextChatOnly,
+        writesFirst: writesFirst ?? current.writesFirst,
+      );
       if (mounted) setState(() => _saved = saved);
     } on BotModeUnconfirmed {
       if (!mounted) return;
@@ -121,7 +126,10 @@ class _BotProfileViewState extends State<_BotProfileView> {
         ),
       );
     } on Object catch (error) {
-      if (mounted) _hint(botSaveFailureMessage(error, state.tr));
+      if (mounted) {
+        setState(() => _saved = saver.saved);
+        _hint(botSaveFailureMessage(error, state.tr));
+      }
     } finally {
       if (mounted) {
         setState(() {
@@ -141,7 +149,7 @@ class _BotProfileViewState extends State<_BotProfileView> {
   ) async {
     final text = await openPage<String>(
       context,
-      _LongTextPage(state: state, title: title, value: value, note: note),
+      LongTextPage(state: state, title: title, value: value, note: note),
     );
     if (text != null && text != value && mounted) save(text);
   }
@@ -291,7 +299,21 @@ class _BotProfileViewState extends State<_BotProfileView> {
               ),
             ],
           ),
-          _Note(_modeNote(state)),
+          _Note(_modeNote(state, chatOnly)),
+          GroupCard(
+            children: [
+              _SwitchTile(
+                tileKey: const ValueKey('bot-writes-first'),
+                icon: 'navigation',
+                title: state.tr('可以主动找我', 'Can contact me first'),
+                value: bot.writesFirst,
+                onChanged: _saving
+                    ? null
+                    : (value) => _save(writesFirst: value),
+              ),
+            ],
+          ),
+          _Note(_writesFirstNote(state)),
           SectionLabel(state.tr('能力', 'Abilities')),
           GroupCard(
             children: [
@@ -310,6 +332,30 @@ class _BotProfileViewState extends State<_BotProfileView> {
                 ),
             ],
           ),
+          // 推荐回复和上面的能力是两回事：隔开一张卡片，不贴在一起。
+          const SizedBox(height: 16),
+          GroupCard(
+            children: [
+              _SwitchTile(
+                tileKey: const ValueKey('bot-suggestions-setting'),
+                icon: 'circle-dashed',
+                title: state.tr('推荐回复', 'Suggested replies'),
+                value: state.botSuggestionsEnabled(
+                  widget.ref.desktopId,
+                  bot.id,
+                ),
+                onChanged: (value) => runUi(
+                  context,
+                  () => state.setBotSuggestionsEnabled(
+                    widget.ref.desktopId,
+                    bot.id,
+                    value,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          _Note(_suggestionsNote(state)),
           const SizedBox(height: 24),
           GroupCard(
             children: [
@@ -330,7 +376,13 @@ class _BotProfileViewState extends State<_BotProfileView> {
                   () => _clearBotChat(context, state, widget.ref),
                 ),
               ),
-              if (!bot.assistant)
+            ],
+          ),
+          if (!bot.assistant) ...[
+            // 删除 Bot 是不可逆的：单独一张卡片，和别的操作隔开。
+            const SizedBox(height: 16),
+            GroupCard(
+              children: [
                 SettingsRow(
                   state.tr('删除 Bot', 'Delete bot'),
                   icon: 'user-x',
@@ -342,12 +394,9 @@ class _BotProfileViewState extends State<_BotProfileView> {
                     }
                   }),
                 ),
-            ],
-          ),
-          Padding(
-            padding: const EdgeInsets.only(top: 8),
-            child: _Note(_limitsNote(state)),
-          ),
+              ],
+            ),
+          ],
         ],
       ),
     );

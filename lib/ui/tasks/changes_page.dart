@@ -756,7 +756,6 @@ void openChangeDiff(
     );
     return;
   }
-  FocusManager.instance.primaryFocus?.unfocus();
   Navigator.of(context).push(
     MaterialPageRoute<void>(
       builder: (_) => ProjectFilePage(
@@ -855,10 +854,24 @@ class _ProjectFilePageState extends State<ProjectFilePage> {
                 _result?['text'] is String
           ? SafeArea(
               top: false,
-              child: DiffView(
-                before: _result!['original'] as String,
-                after: _result!['text'] as String,
-                tr: tr,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  if (_result?['originalFrom'] == 'head')
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                      child: Text(
+                        tr('与上次提交比较', 'Compared with the last commit'),
+                      ),
+                    ),
+                  Expanded(
+                    child: DiffView(
+                      before: _result!['original'] as String,
+                      after: _result!['text'] as String,
+                      tr: tr,
+                    ),
+                  ),
+                ],
               ),
             )
           : ListView(

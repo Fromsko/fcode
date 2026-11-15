@@ -156,7 +156,7 @@ class _DevicePageState extends State<DevicePage> {
     try {
       await state.link.checkConnection(desktopId);
       result = state.tr(
-        '已通过电脑身份认证，当前连接可用；不代表每个保存地址均可达。',
+        '已验证电脑身份，当前连接可用。其他保存的地址不一定可达。',
         'The authenticated connection works; this does not test every saved address.',
       );
     } on Object catch (error) {
@@ -228,10 +228,10 @@ class _DevicePageState extends State<DevicePage> {
           : desktop.relays.join('\n');
     }
     if (desktop.relays.isNotEmpty) {
-      return '${state.tr('尚未收到电脑的中继策略，暂用旧版保存的提示：', 'No relay policy from the desktop yet; using a hint saved by an older version:')}\n${desktop.relays.join('\n')}';
+      return '${state.tr('尚未收到电脑的中继设置，暂用之前保存的：', 'No relay policy from the desktop yet; using a hint saved by an older version:')}\n${desktop.relays.join('\n')}';
     }
     return state.tr(
-      '尚未收到电脑的中继策略，暂用内置中继',
+      '尚未收到电脑的中继设置，暂用内置中继',
       'No relay policy from the desktop yet; using built-in relays',
     );
   }
@@ -405,7 +405,7 @@ class _DevicePageState extends State<DevicePage> {
                   state,
                   state.tr('取消配对？', 'Unpair desktop?'),
                   state.tr(
-                    '将移除本机信任记录。电脑离线时，仍需在电脑端移除手机授权。',
+                    '只移除手机上的记录。电脑离线时，需另在电脑上移除这台手机。',
                     'Remove trust on this phone. If offline, also revoke the phone on the desktop.',
                   ),
                   action: state.tr('取消配对', 'Unpair'),
@@ -436,7 +436,7 @@ class _DevicePageState extends State<DevicePage> {
               ? state.tr('尚无地址', 'No addresses')
               : ports.join(', '),
           subtitle: state.tr(
-            '来自保存的连接地址，监听端口仍在电脑端设置。',
+            '来自已保存的地址，监听端口在电脑上设置。',
             'From saved addresses. Configure the listening port on the desktop.',
           ),
         ),
@@ -458,7 +458,7 @@ class _DevicePageState extends State<DevicePage> {
           subtitle:
               _checkResult ??
               state.tr(
-                '在线时检查当前认证连接；测试新地址请先重新连接。',
+                '检查当前连接。测试新地址需先重新连接。',
                 'Checks the current connection when online. Reconnect first to test new addresses.',
               ),
           onTap: state.demo || desktop.needsPairing || _checking
@@ -479,7 +479,7 @@ class _DevicePageState extends State<DevicePage> {
             title: Text(state.tr('尚无地址', 'No addresses')),
             subtitle: Text(
               state.tr(
-                '连上电脑后会自动记下它说过的地址。',
+                '连上电脑后自动保存它提供的地址。',
                 'Addresses the desktop reports are saved once it connects.',
               ),
             ),
@@ -509,7 +509,7 @@ class _DevicePageState extends State<DevicePage> {
           title: Text(state.tr('添加地址', 'Add an address')),
           subtitle: Text(
             state.tr(
-              '电脑在路由器后面用端口转发，或者用动态域名时，在这里填「域名或 IP:端口」。',
+              '电脑使用端口转发或动态域名时，在此填写「域名或 IP:端口」。',
               'Behind a router with port forwarding, or on a dynamic DNS name: enter “host or IP:port” here.',
             ),
           ),
@@ -526,7 +526,7 @@ class _DevicePageState extends State<DevicePage> {
           ),
           child: Text(
             state.tr(
-              '电脑上次连上时告诉手机这些地址；中继和端口在电脑的「设置 → 手机 → 中继」里改。',
+              '电脑上次连接时提供的地址。中继和端口在电脑「设置 → 手机 → 中继」中修改。',
               'These are the addresses the desktop last reported. Its relays and ports are set under Settings → Phone → Relays on the desktop.',
             ),
             style: theme.textTheme.bodySmall,
@@ -590,15 +590,15 @@ class _DevicePageState extends State<DevicePage> {
             if (desktop.needsPairing)
               CardNote(
                 state.tr(
-                  '连接协议已升级，旧授权不能继续使用。请更新电脑并重新扫码；确认新连接后可手动移除旧记录。',
+                  '连接协议已升级，旧授权已失效。请更新电脑端后重新扫码，连接成功后可移除旧记录。',
                   'The link protocol changed. Update the desktop and pair again. Remove the old record manually after checking the new connection.',
                 ),
               ),
             if (state.link.hasUnsavedAddress(desktop.id))
               CardNote(
                 state.tr(
-                  '连接已建立，但新的连接地址或中继策略未能保存。重启后可能需要重新发现电脑或重新获取中继策略。',
-                  'Connected, but the new connection addresses or relay policy could not be saved. Rediscovery or a fresh relay policy may be needed after restarting.',
+                  '已连接，但新的地址或中继设置未能保存，重启后可能需要重新连接。',
+                  'Connected, but the new addresses or relay settings could not be saved. You may need to reconnect after restarting.',
                 ),
               ),
             SectionLabel(state.tr('电脑的地址', 'Desktop addresses'), inset: 4),
@@ -781,7 +781,7 @@ class _PairDevicePageState extends State<PairDevicePage> {
         const SizedBox(height: MobileSpace.md),
         Text(
           widget.state.tr(
-            '让二维码填满方框；识别不到时离远一点，或双指放大',
+            '将二维码置于框内；识别不了可稍微拉远或双指放大',
             'Fill the frame with the code. If it is not read, step back a little or pinch to zoom.',
           ),
           textAlign: TextAlign.center,
@@ -956,7 +956,7 @@ class _PairDevicePageState extends State<PairDevicePage> {
             if (state.discovery.error != null)
               Text(
                 state.tr(
-                  '局域网发现不可用。你仍可扫码或粘贴链接。',
+                  '局域网发现不可用，可扫码或粘贴链接配对。',
                   'Discovery is unavailable. You can still scan or paste a pairing link.',
                 ),
               ),
@@ -990,7 +990,7 @@ class _PairDevicePageState extends State<PairDevicePage> {
                       Expanded(
                         child: Text(
                           state.tr(
-                            '二维码里有电脑的公钥和地址。手机经局域网或公网直接连接电脑，两端之间的所有内容都用只保存在两端的密钥加密。',
+                            '二维码包含电脑的公钥和地址。手机通过局域网或公网直连电脑，所有内容都用仅保存在两端的密钥加密。',
                             "The code holds the desktop's public key and addresses. The phone connects to the desktop directly over the LAN or internet, and everything between them is encrypted with keys kept only on the two devices.",
                           ),
                           style: MobileTheme.hintStyleOf(context),
@@ -1059,7 +1059,7 @@ class _SafetyDialogState extends State<_SafetyDialog> {
             const SizedBox(height: 16),
             Text(
               state.tr(
-                '请确认电脑显示相同数字。不同请取消。',
+                '请确认电脑上显示的数字相同，不同请取消。',
                 'Confirm the desktop shows the same digits. Cancel if they differ.',
               ),
             ),
@@ -1068,7 +1068,7 @@ class _SafetyDialogState extends State<_SafetyDialog> {
               const ThinProgress(),
               Text(
                 state.tr(
-                  '正在确认；若电脑要求授权，请在电脑点击允许。',
+                  '正在确认。如电脑弹出授权请求，请点击允许。',
                   'Confirming. Approve on the desktop if requested.',
                 ),
               ),

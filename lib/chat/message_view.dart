@@ -10,10 +10,13 @@ import '../ui/bots/bots_tab.dart';
 import 'widgets/image_deck.dart';
 
 import '../state/app_state.dart';
+import '../state/upload_file.dart' show fileReferenceRegion, fileReferenceName;
+import '../ui/widgets/file_attachment.dart';
 import '../link/chat_codec.dart';
 import '../ui/tasks/subagent_page.dart';
 import '../ui/widgets/bubble_menu.dart';
 import '../ui/widgets/image_gallery.dart';
+import '../ui/widgets/formats.dart';
 import '../ui/widgets/mobile_widgets.dart';
 import 'chat_links.dart';
 import 'chat_markdown.dart';
@@ -33,9 +36,14 @@ export 'widgets/message_pictures.dart';
 
 part 'message_view_bot.dart';
 
-/// Bot 对话里气泡的左右边界：12 边距 + 40 头像 + 4 间隔 + 6 气泡尖角，
+/// Bot 对话里气泡的左右边界：12 边距 + 40 头像 + 6 间隔 + 6 气泡尖角，
 /// 右侧留出对面头像的位置。卡片和旁白都对齐到这里。
-const botContentInsets = EdgeInsets.fromLTRB(62, 0, 56, 0);
+const botContentInsets = EdgeInsets.fromLTRB(
+  _botBubbleInset,
+  0,
+  12 + _botAvatarSize,
+  0,
+);
 
 /// 自己发的气泡：绿底配深色字，夜间也是，不随主题强调色变。
 Color botUserBubbleColor(BuildContext context) =>
@@ -60,6 +68,9 @@ class MessageView extends StatelessWidget {
     this.footer,
     this.showItem = true,
     this.bot,
+    this.senderName,
+    this.quote,
+    this.onQuote,
   });
   final AppState state;
   final String desktopId;
@@ -75,6 +86,15 @@ class MessageView extends StatelessWidget {
   final TurnFooterData? footer;
   final bool showItem;
   final BotRef? bot;
+
+  /// 群聊里气泡上方显示的发信人名字；一对一的对话不传。
+  final String? senderName;
+
+  /// 群聊里气泡下方的引用块。
+  final ({String who, String text, VoidCallback? onTap})? quote;
+
+  /// 长按菜单里的「引用」。
+  final VoidCallback? onQuote;
 
   Widget _footer() => TurnFooter(
     answer: footer?.answer,
@@ -123,8 +143,19 @@ class MessageView extends StatelessWidget {
     final session = sessionId;
     final source = index;
     if (session == null || source == null) return selected;
-    final items = state.buffer(desktopId, session).items;
-    if (source < 0 || source >= items.length) return selected;
+    final buffer = state.buffer(desktopId, session);
+    final items = buffer.items;
+    final privateIndexes = bot == null
+        ? null
+        : botRows(
+            items,
+            startsAtBeginning: buffer.earlier != true,
+          ).where((row) => !row.isFold).map((row) => row.index).toSet();
+    if (source < 0 ||
+        source >= items.length ||
+        (privateIndexes != null && !privateIndexes.contains(source))) {
+      return selected;
+    }
     final ChatItem? sourceItem;
     try {
       sourceItem = items[source] is ChatItem
@@ -138,6 +169,7 @@ class MessageView extends StatelessWidget {
     final images = <GalleryImage>[];
     int? initialIndex;
     for (var i = 0; i < items.length; i++) {
+      if (privateIndexes != null && !privateIndexes.contains(i)) continue;
       final ChatItem? decoded;
       try {
         decoded = items[i] is ChatItem
@@ -190,9 +222,39 @@ class MessageView extends StatelessWidget {
       /* Malformed or newer wire items still occupy a visible row. */
     }
     final value = decoded;
+    if (bot != null &&
+        value is UserMessageItem &&
+        ChatCodec.botEvent(value) != null) {
+      return const SizedBox.shrink();
+    }
     if (bot != null && value is AssistantTextItem) {
       final parts = ChatCodec.botParts(value.text);
       if (parts.isNotEmpty) return _botParts(context, parts);
+      if (ChatCodec.botVisibleText(value.text).isEmpty) {
+        return const SizedBox.shrink();
+      }
+    }
+    if (bot != null &&
+        value is ToolCallItem &&
+        value.tool == ChatCodec.botSendTool) {
+      final sent = ChatCodec.botSentToUser(value);
+      if (sent == null) return const SizedBox.shrink();
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (sent.isNotEmpty) _botBubble(context, AssistantTextItem(sent)),
+          if (value.images.isNotEmpty)
+            Padding(
+              padding: botContentInsets.add(
+                const EdgeInsets.symmetric(vertical: 8),
+              ),
+              child: ImageDeck(
+                images: value.images.map(GalleryImage.fromAttachment).toList(),
+                tr: state.tr,
+              ),
+            ),
+        ],
+      );
     }
     if (bot != null &&
         (value is UserMessageItem || value is AssistantTextItem)) {
@@ -202,16 +264,8 @@ class MessageView extends StatelessWidget {
     if (value is UserMessageItem) {
       content = _userMessage(context, value);
     } else if (value is AssistantTextItem) {
-      final parts = ChatCodec.botParts(value.text);
-      content = Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (parts.isEmpty)
-            _prose(value.text)
-          else
-            for (final (tag, text) in parts) _botPart(context, tag, text),
-        ],
-      );
+      // 普通智能体不解释 Bot 标签，也不删除语气或内部标记。
+      content = _prose(value.text);
     } else if (value is ToolCallItem && value.input['sticker'] is String) {
       // A bot's sticker arrives as a tool item carrying the sticker id.
       // Align gives the sticker loose constraints; the message row's tight
@@ -293,13 +347,28 @@ class MessageView extends StatelessWidget {
     );
   }
 
-  Widget _prose(String text) => ChatMarkdown(
-    state: state,
-    desktopId: desktopId,
-    projectId: projectId,
-    botId: bot?.bot.id,
-    text: text,
-  );
+  VoidCallback? _openFile(BuildContext context, String path) =>
+      projectId == null && bot == null
+      ? null
+      : () => showLinkedFile(
+          context,
+          state,
+          desktopId,
+          projectId,
+          path,
+          botId: bot?.bot.id,
+        );
+
+  Widget _prose(String text, {TextStyle? style, bool selectable = true}) =>
+      ChatMarkdown(
+        state: state,
+        desktopId: desktopId,
+        projectId: projectId,
+        botId: bot?.bot.id,
+        text: text,
+        style: style,
+        selectable: selectable,
+      );
 
   Widget _fold(
     BuildContext context,
@@ -364,7 +433,10 @@ class MessageView extends StatelessWidget {
   }
 
   Widget _userMessage(BuildContext context, UserMessageItem value) {
-    final text = messageBody(value.text, value.images);
+    final references = fileReferenceRegion(
+      messageBody(value.text, value.images),
+    );
+    final text = references.body;
     final muted = Theme.of(context).colorScheme.onSurfaceVariant;
     Widget action(String icon, String tooltip, VoidCallback? onTap) => Tooltip(
       message: tooltip,
@@ -417,6 +489,17 @@ class MessageView extends StatelessWidget {
                       SelectableText(
                         text,
                         style: MobileTheme.messageStyleOf(context),
+                      ),
+                    for (final path in references.paths)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(
+                          vertical: MobileSpace.xs,
+                        ),
+                        child: FileAttachment(
+                          name: fileReferenceName(path),
+                          path: path,
+                          onTap: _openFile(context, path),
+                        ),
                       ),
                     if (value.images.isNotEmpty) _images(value.images),
                     if (value.queued)

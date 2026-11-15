@@ -62,3 +62,12 @@ Copyright (C) 2026 shuishan. The project as a whole is released under **GPL-3.0-
 Issues and pull requests are welcome; see [CONTRIBUTING.md](CONTRIBUTING.md). Please report security issues privately as described in [SECURITY.md](SECURITY.md).
 
 Never include model credentials, pairing details, real chat logs, signing keys or signing passwords in commits or public issues.
+
+## Buy me a coffee
+
+If YCode is useful to you, you can buy the author a coffee.
+
+<p>
+  <img src="assets/donate/wechat.webp" alt="WeChat Pay" width="200">
+  <img src="assets/donate/alipay.webp" alt="Alipay" width="200">
+</p>

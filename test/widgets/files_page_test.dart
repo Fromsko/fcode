@@ -230,6 +230,31 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('子文件夹里下拉也重新取文件列表，旧内容留着不闪', (tester) async {
+    final state = _Disk();
+    addTearDown(state.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: MobileTheme.build(Brightness.light),
+        home: FilesPage(state: state, project: _project),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('file-row-build')));
+    await tester.pumpAndSettle();
+    expect(state.folders, ['', 'build']);
+
+    await tester.drag(
+      find.byKey(const ValueKey('file-row-out.txt')),
+      const Offset(0, 200),
+    );
+    await tester.pump();
+    expect(find.byKey(const ValueKey('file-row-out.txt')), findsOneWidget);
+    await tester.pumpAndSettle();
+    expect(state.folders, ['', 'build', 'build']);
+    expect(find.byKey(const ValueKey('file-row-out.txt')), findsOneWidget);
+  });
+
   testWidgets('旧电脑端没有 folder 时照常只列 files', (tester) async {
     final state = _Disk(failure: LinkErrors.unknown);
     addTearDown(state.dispose);

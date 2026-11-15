@@ -179,8 +179,6 @@ class _MermaidCodeBlockState extends State<MermaidCodeBlock> with CopyFeedback {
   Future<void> _preview(mermaid.RenderScene scene) async {
     final picture = await _picture(scene);
     if (!mounted) return;
-    // Else closing hands focus back to the composer and the keyboard rises.
-    FocusManager.instance.primaryFocus?.unfocus();
     await showDialog<void>(
       context: context,
       builder: (context) => Dialog.fullscreen(

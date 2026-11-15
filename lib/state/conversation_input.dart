@@ -2,6 +2,66 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import '../models/session_buffer.dart';
+import 'upload_file.dart'
+    show fileMentionText, hasFileMention, isHostAbsolutePath;
+
+/// 只在内存中持有身份；落盘只保存电脑已确认的文件元数据。
+enum DraftFileStatus { uploading, ready, failed, unconfirmed }
+
+class DraftFile {
+  DraftFile({
+    required this.name,
+    this.size,
+    this.path,
+    this.status = DraftFileStatus.uploading,
+    this.error,
+    Object? token,
+  }) : token = token ?? Object();
+
+  final Object token;
+  final String name;
+  final int? size;
+  final String? path, error;
+  final DraftFileStatus status;
+  bool get ready => status == DraftFileStatus.ready && path != null;
+
+  DraftFile resolved({
+    String? path,
+    required DraftFileStatus status,
+    String? error,
+  }) => DraftFile(
+    name: name,
+    size: size,
+    path: path,
+    status: status,
+    error: error,
+    token: token,
+  );
+}
+
+/// 普通项目 mentions 仍精确匹配正文；只有明确选择的附件才补入引用区。
+({String text, List<String> mentions}) assembleInput(InputDraft draft) {
+  if (draft.files.any((file) => !file.ready)) {
+    throw const FormatException('文件尚未就绪');
+  }
+  final paths = <String>{
+    for (final path in draft.mentions)
+      if (hasFileMention(draft.text, path)) path,
+    for (final file in draft.files) file.path!,
+  };
+  final references = {
+    for (final file in draft.files)
+      if (!hasFileMention(draft.text, file.path!)) fileMentionText(file.path!),
+  }.join('\n');
+  return (
+    text: references.isEmpty
+        ? draft.text
+        : draft.text.isEmpty
+        ? references
+        : '${draft.text}\n\n$references',
+    mentions: paths.toList(),
+  );
+}
 
 class DraftImage {
   const DraftImage(this.name, this.type, this.bytes);
@@ -20,12 +80,14 @@ class InputDraft {
     this.text = '',
     this.images = const [],
     this.mentions = const {},
+    this.files = const [],
     this.imagesMissing = false,
   });
 
   final String text;
   final List<DraftImage> images;
   final Set<String> mentions;
+  final List<DraftFile> files;
   final bool imagesMissing;
 
   factory InputDraft.fromStored(Object? value) {
@@ -36,6 +98,31 @@ class InputDraft {
       mentions: value['mentions'] is List
           ? (value['mentions'] as List).whereType<String>().toSet()
           : const {},
+      files: [
+        if (value['files'] is List)
+          for (final entry in value['files'] as List)
+            if (entry is Map &&
+                entry['name'] is String &&
+                (entry['name'] as String).isNotEmpty &&
+                entry['path'] is String &&
+                isHostAbsolutePath(entry['path'] as String) &&
+                !(entry['path'] as String).contains(
+                  RegExp(r'[\x00-\x1f\x7f"]'),
+                ) &&
+                (entry['size'] == null ||
+                    entry['size'] is int && (entry['size'] as int) >= 0))
+              DraftFile(
+                name: entry['name'] as String,
+                size: entry['size'] as int?,
+                path: entry['path'] as String,
+                status: DraftFileStatus.ready,
+              )
+            else
+              DraftFile(name: '', status: DraftFileStatus.unconfirmed),
+        if (value['filesPending'] == true ||
+            value.containsKey('files') && value['files'] is! List)
+          DraftFile(name: '', status: DraftFileStatus.unconfirmed),
+      ],
       imagesMissing: value['imagesPending'] == true,
     );
   }
@@ -43,11 +130,22 @@ class InputDraft {
   Map<String, Object?> toStored() => {
     'text': text,
     'mentions': mentions.toList(),
+    if (files.any((file) => file.ready))
+      'files': [
+        for (final file in files)
+          if (file.ready)
+            {'name': file.name, 'size': file.size, 'path': file.path},
+      ],
+    if (files.any((file) => !file.ready)) 'filesPending': true,
     if (images.isNotEmpty || imagesMissing) 'imagesPending': true,
   };
 
   bool get isEmpty =>
-      text.isEmpty && images.isEmpty && mentions.isEmpty && !imagesMissing;
+      text.isEmpty &&
+      images.isEmpty &&
+      files.isEmpty &&
+      mentions.isEmpty &&
+      !imagesMissing;
 
   InputDraft afterSending(InputDraft sent) {
     final remainingText = text == sent.text ? '' : text;
@@ -59,8 +157,12 @@ class InputDraft {
       ],
       mentions: {
         for (final path in mentions)
-          if (remainingText.contains('@$path')) path,
+          if (hasFileMention(remainingText, path)) path,
       },
+      files: [
+        for (final file in files)
+          if (!sent.files.any((sentFile) => sentFile.token == file.token)) file,
+      ],
       imagesMissing: imagesMissing,
     );
   }

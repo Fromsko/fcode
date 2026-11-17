@@ -64,6 +64,28 @@ class ConversationFilters {
     return result;
   }
 
+  /// The pinned conversations of [input]'s projects, as the desktop's
+  /// sidebar puts them on top: latest first (its own order is not sent).
+  List<SessionRef> pinned(
+    Iterable<ProjectRef> input,
+    List<SessionRef> allSessions,
+    String Function(String) desktopName,
+  ) => [
+    for (final ref in input)
+      ...sessions(
+        allSessions.where(
+          (s) =>
+              s.session.pinned &&
+              s.desktopId == ref.desktopId &&
+              s.session.project == ref.project.id,
+        ),
+        desktopName,
+        projectName: ref.project.name,
+      ),
+  ]..sort((a, b) => b.session.updatedAt.compareTo(a.session.updatedAt));
+
+  /// [input]'s projects with their conversations but the pinned ones, which
+  /// stand on top apart ([pinned]), as on the desktop.
   List<ConversationProject> projects(
     Iterable<ProjectRef> input,
     List<SessionRef> allSessions,
@@ -80,6 +102,7 @@ class ConversationFilters {
       final matching = sessions(
         allSessions.where(
           (s) =>
+              !s.session.pinned &&
               s.desktopId == ref.desktopId &&
               s.session.project == ref.project.id,
         ),

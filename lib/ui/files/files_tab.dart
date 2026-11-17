@@ -20,6 +20,8 @@ import '../widgets/mobile_widgets.dart';
 import '../widgets/pull_refresh.dart';
 import '../widgets/bottom_sheet_panel.dart';
 import '../widgets/dropdown_panel.dart';
+import '../widgets/scrolling_selection_area.dart';
+import '../widgets/top_hint.dart';
 import 'file_source_view.dart';
 import 'diff_lines.dart';
 import 'line_diff.dart';
@@ -641,27 +643,6 @@ class _FileViewerPageState extends State<FileViewerPage> {
     });
   }
 
-  Future<void> _copy(String text) async {
-    try {
-      await Clipboard.setData(ClipboardData(text: text));
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(widget.state.tr('已复制', 'Copied'))),
-        );
-      }
-    } catch (_) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              widget.state.tr('复制失败，请重试。', 'Copy failed. Please try again.'),
-            ),
-          ),
-        );
-      }
-    }
-  }
-
   Future<void> _more(BuildContext anchor, Map<String, Object?>? data) async {
     final state = widget.state;
     final text = data?['text'] as String?;
@@ -733,9 +714,9 @@ class _FileViewerPageState extends State<FileViewerPage> {
       case _FileAction.smaller:
         setState(() => _fontSize = (size - 2).clamp(10, 24).toDouble());
       case _FileAction.copyPath:
-        await _copy(widget.path);
+        await copyWithNote(context, widget.state, widget.path);
       case _FileAction.copyContent:
-        if (text != null) await _copy(text);
+        if (text != null) await copyWithNote(context, widget.state, text);
       case _FileAction.download:
         await _download();
     }
@@ -755,9 +736,7 @@ class _FileViewerPageState extends State<FileViewerPage> {
         final bytes = decodeFileDownload(result);
         final saved = await saveFile(widget.path.split('/').last, bytes);
         if (saved && mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(widget.state.tr('文件已保存', 'File saved'))),
-          );
+          showTopHint(context, widget.state.tr('文件已保存', 'File saved'));
         }
       }, errorMessage: (error) => userMessage(widget.state, error));
     } finally {
@@ -1024,7 +1003,7 @@ class _FileViewerPageState extends State<FileViewerPage> {
             ),
             // 分段交给惰性列表：只排版看得见的块，几百行的文件滚动才跟得上。
             // 预览不做整页缩放（源码页保留），字大手写在这里调主题字号即可。
-            _FileMode.preview => SelectionArea(
+            _FileMode.preview => ScrollingSelectionArea(
               child: ListView.builder(
                 key: PageStorageKey(('file-preview', widget.path)),
                 padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
@@ -1419,33 +1398,31 @@ class _DiffViewState extends State<DiffView> {
                   double.infinity,
                 ),
               );
-              return SelectionArea(
-                child: _codeViewport(
-                  context,
-                  style,
-                  lines.map((line) => line.text),
-                  gutter + marker + 24,
-                  _horizontal,
-                  physics,
-                  ListView.custom(
-                    controller: _scroll,
-                    physics: physics,
-                    // 留出浮动按钮的高度，最后几行不被盖住；按钮不随页面缩放。
-                    padding: EdgeInsets.only(
-                      bottom: _starts.isEmpty ? 0 : 72 / scale,
+              return _codeViewport(
+                context,
+                style,
+                lines.map((line) => line.text),
+                gutter + marker + 24,
+                _horizontal,
+                physics,
+                ListView.custom(
+                  controller: _scroll,
+                  physics: physics,
+                  // 留出浮动按钮的高度，最后几行不被盖住；按钮不随页面缩放。
+                  padding: EdgeInsets.only(
+                    bottom: _starts.isEmpty ? 0 : 72 / scale,
+                  ),
+                  semanticChildCount: lines.length,
+                  itemExtentBuilder: (index, _) => _heights[index],
+                  childrenDelegate: _KnownExtentDelegate(
+                    (context, index) => DiffLineRow(
+                      lines[index],
+                      metrics: metrics,
+                      strutStyle: _strut,
+                      softWrap: !_sideways,
                     ),
-                    semanticChildCount: lines.length,
-                    itemExtentBuilder: (index, _) => _heights[index],
-                    childrenDelegate: _KnownExtentDelegate(
-                      (context, index) => DiffLineRow(
-                        lines[index],
-                        metrics: metrics,
-                        strutStyle: _strut,
-                        softWrap: !_sideways,
-                      ),
-                      childCount: lines.length,
-                      extent: _offsets.last,
-                    ),
+                    childCount: lines.length,
+                    extent: _offsets.last,
                   ),
                 ),
               );

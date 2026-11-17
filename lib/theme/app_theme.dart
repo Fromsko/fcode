@@ -495,19 +495,6 @@ abstract final class MobileTheme {
         ),
         actionsPadding: const EdgeInsets.fromLTRB(20, 4, 20, 20),
       ),
-      // 一行小提示：窄一些、矮一些、圆角小一点，不挡住正在写的地方。
-      snackBarTheme: SnackBarThemeData(
-        behavior: SnackBarBehavior.floating,
-        insetPadding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-        contentTextStyle: text.bodySmall?.copyWith(
-          color: scheme.onInverseSurface,
-          fontSize: MobileType.secondary,
-        ),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(MobileSizes.radius),
-        ),
-        elevation: 2,
-      ),
       bottomSheetTheme: BottomSheetThemeData(
         backgroundColor: scheme.surface,
         surfaceTintColor: Colors.transparent,

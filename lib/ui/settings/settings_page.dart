@@ -17,6 +17,7 @@ import '../widgets/image_gallery.dart';
 import '../widgets/lucide_icon.dart';
 import '../widgets/mobile_widgets.dart';
 import '../widgets/scale_slider.dart';
+import '../widgets/top_hint.dart';
 import '../user_message.dart';
 import 'changelog_page.dart';
 import 'update_dialog.dart';
@@ -897,12 +898,9 @@ class SecurityPage extends StatelessWidget {
     await runUi(context, () async {
       await state.link.resetIdentity();
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              state.tr('已重置，请重新配对电脑', 'Reset. Pair your desktops again.'),
-            ),
-          ),
+        showTopHint(
+          context,
+          state.tr('已重置，请重新配对电脑', 'Reset. Pair your desktops again.'),
         );
       }
     });
@@ -1381,14 +1379,11 @@ class _UpdateCheckRowState extends State<UpdateCheckRow> {
     } else if (found.newer) {
       await _newer(found);
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            widget.state.tr(
-              '已是最新版本（${found.latest.version}）',
-              'You are up to date (${found.latest.version})',
-            ),
-          ),
+      showTopHint(
+        context,
+        widget.state.tr(
+          '已是最新版本（${found.latest.version}）',
+          'You are up to date (${found.latest.version})',
         ),
       );
     }

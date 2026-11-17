@@ -90,6 +90,17 @@ void main() {
       expect(anchor.locate(buffer), 1);
     });
 
+    test('回合被停止时写回的停止标记不算消息变化', () {
+      final buffer = seeded();
+      final anchor = MessageEditAnchor.capture(buffer, 1);
+      buffer.apply(
+        update(1, [
+          {...msg('1'), 'worked': 1200, 'stopped': true},
+        ]),
+      );
+      expect(anchor.locate(buffer), 1);
+    });
+
     test('长回复产生大量修订也不失效', () {
       final buffer = seeded();
       final anchor = MessageEditAnchor.capture(buffer, 0);

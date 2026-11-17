@@ -256,8 +256,22 @@ abstract final class LinkMethods {
   /// Returns `{"path"}` (the host's absolute path) or `{"tooLarge": true}`.
   static const upload = 'upload';
 
-  /// Large answers use individual streams, holding up no control events.
-  static const bulk = {read, image, icon, files, folder, botAvatar, extensions, groupImage};
+  /// Those whose answers, or requests, can be large: each goes on a stream
+  /// of its own (see [LinkPeer]), holding up nothing else. A picture sent
+  /// (the user's, a bot's) is up to a megabyte: on the control stream, an
+  /// agent opened after it waited seconds over a relay.
+  static const bulk = {
+    read,
+    image,
+    icon,
+    files,
+    folder,
+    botAvatar,
+    extensions,
+    groupImage,
+    setMe,
+    saveBot,
+  };
 }
 
 /// How much of what a phone asks for it gets, at most.

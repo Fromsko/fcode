@@ -794,12 +794,7 @@ class AppState extends ChangeNotifier {
     String id, [
     Iterable<LinkChoice>? choices,
   ]) {
-    choices ??= [
-      for (final ref in sessions)
-        if (ref.desktopId == desktopId)
-          ...?peekBuffer(desktopId, ref.session.id)?.choices,
-    ];
-    for (final choice in choices) {
+    for (final choice in choices ?? _modelChoices(desktopId)) {
       if (choice.kind != 'model') continue;
       for (final option in choice.options) {
         if (option.id == id) {
@@ -814,6 +809,24 @@ class AppState extends ChangeNotifier {
     }
     return (id: id, label: id, provider: null, providerLabel: null);
   }
+
+  Iterable<LinkChoice> _modelChoices(String desktopId) => [
+    for (final ref in sessions)
+      if (ref.desktopId == desktopId)
+        ...?peekBuffer(desktopId, ref.session.id)?.choices,
+  ];
+
+  /// What [desktopId]'s model menus list (of the conversations the phone
+  /// follows), each by its name and upstream: what a subagent's model is
+  /// named by.
+  List<({String id, String label, String? upstream})> modelMenu(
+    String desktopId,
+  ) => [
+    for (final choice in _modelChoices(desktopId))
+      if (choice.kind == 'model')
+        for (final option in choice.options)
+          (id: option.id, label: option.label, upstream: option.groupLabel),
+  ];
 
   /// Keeps the models known now for when they no longer are.
   void _rememberModels() {
@@ -993,22 +1006,6 @@ class AppState extends ChangeNotifier {
     // 链可继续，调用者仍收到本次写入错误。
     _draftWrites = write.catchError((Object _) {});
     return write;
-  }
-
-  /// Whether [ref] is shown on the home list, beside the projects.
-  bool onHome(SessionRef ref) =>
-      settings.homeSessions.contains((ref.desktopId, ref.session.id));
-
-  /// Shows [ref] on the home list, or no longer.
-  Future<void> setOnHome(SessionRef ref, bool shown) async {
-    final key = (ref.desktopId, ref.session.id);
-    if (shown) {
-      settings.homeSessions.add(key);
-    } else {
-      settings.homeSessions.remove(key);
-    }
-    _notify();
-    await saveSettings();
   }
 
   bool botPinned(BotRef ref) =>

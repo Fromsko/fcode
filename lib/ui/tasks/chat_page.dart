@@ -36,6 +36,7 @@ import '../widgets/lucide_icon.dart';
 import '../widgets/dropdown_panel.dart';
 import '../widgets/earlier_messages.dart';
 import '../widgets/fold_row.dart';
+import '../widgets/scrolling_selection_area.dart';
 import '../widgets/mobile_widgets.dart';
 import '../widgets/model_icon.dart';
 import 'changes_page.dart';

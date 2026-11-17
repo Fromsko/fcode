@@ -210,41 +210,73 @@ class _ClickListenerState extends State<_ClickListener> {
   Offset? _down;
   DateTime? _downAt;
 
+  /// Set by a [StepHeaderOwnTap] under the pointer, which hears it first.
+  bool _claimed = false;
+
   @override
   Widget build(BuildContext context) {
-    return Listener(
-      behavior: HitTestBehavior.opaque,
-      onPointerDown: (event) {
-        if (event.buttons == kPrimaryButton) {
-          _down = event.position;
-          _downAt = DateTime.now();
-        } else {
+    return _ClickClaim(
+      claim: () => _claimed = true,
+      child: Listener(
+        behavior: HitTestBehavior.opaque,
+        onPointerDown: (event) {
+          final claimed = _claimed;
+          _claimed = false;
+          if (!claimed && event.buttons == kPrimaryButton) {
+            _down = event.position;
+            _downAt = DateTime.now();
+          } else {
+            _down = null;
+            _downAt = null;
+          }
+        },
+        onPointerMove: (event) {
+          final down = _down;
+          if (down != null && (event.position - down).distance > _moveSlop) {
+            _down = null;
+          }
+        },
+        onPointerUp: (_) {
+          final down = _down;
+          final at = _downAt;
           _down = null;
           _downAt = null;
-        }
-      },
-      onPointerMove: (event) {
-        final down = _down;
-        if (down != null && (event.position - down).distance > _moveSlop) {
+          if (down == null || at == null) return;
+          if (DateTime.now().difference(at) >= _tapBudget) return;
+          widget.onClick();
+        },
+        onPointerCancel: (_) {
           _down = null;
-        }
-      },
-      onPointerUp: (_) {
-        final down = _down;
-        final at = _downAt;
-        _down = null;
-        _downAt = null;
-        if (down == null || at == null) return;
-        if (DateTime.now().difference(at) >= _tapBudget) return;
-        widget.onClick();
-      },
-      onPointerCancel: (_) {
-        _down = null;
-        _downAt = null;
-      },
-      child: widget.child,
+          _downAt = null;
+        },
+        child: widget.child,
+      ),
     );
   }
+}
+
+class _ClickClaim extends InheritedWidget {
+  const _ClickClaim({required this.claim, required super.child});
+
+  final VoidCallback claim;
+
+  @override
+  bool updateShouldNotify(_ClickClaim oldWidget) => false;
+}
+
+/// A part of a header that handles its own tap (a thumbnail): a tap on it
+/// does not also open or close the step.
+class StepHeaderOwnTap extends StatelessWidget {
+  const StepHeaderOwnTap({super.key, required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => Listener(
+    onPointerDown: (_) =>
+        context.getInheritedWidgetOfExactType<_ClickClaim>()?.claim(),
+    child: child,
+  );
 }
 
 /// What a step opens to: a framed box under its header, scrolling past

@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:bao_link/bao_link.dart' show LinkLimits;
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:gal/gal.dart';
@@ -9,38 +10,30 @@ import 'package:image_picker/image_picker.dart';
 
 import '../../state/app_state.dart';
 import 'lucide_icon.dart';
+import 'top_hint.dart';
 import '../../theme/app_theme.dart';
 import '../../models/user_facing_error.dart';
 
 /// Saves received media into the device gallery under [album], with a
-/// snackbar for both outcomes. Saving needs no permission on Android 10+.
+/// hint for both outcomes. Saving needs no permission on Android 10+.
 Future<void> saveImageToGallery(
   BuildContext context,
   Uint8List bytes, {
   String album = 'YCode',
 }) async {
-  final messenger = ScaffoldMessenger.of(context);
+  var saved = true;
   try {
     await Gal.putImageBytes(bytes, album: album);
-    messenger.showSnackBar(
-      SnackBar(
-        content: Text(
-          AppState.phrase(
-            '已保存到相册（相册名：$album）',
-            'Saved to the gallery ($album)',
-          ),
-        ),
-      ),
-    );
   } on Object {
-    messenger.showSnackBar(
-      SnackBar(
-        content: Text(
-          AppState.phrase('保存到相册没有成功。', 'Could not save to the gallery.'),
-        ),
-      ),
-    );
+    saved = false;
   }
+  if (!context.mounted) return;
+  showTopHint(
+    context,
+    saved
+        ? AppState.phrase('已保存到相册（相册名：$album）', 'Saved to the gallery ($album)')
+        : AppState.phrase('保存到相册没有成功。', 'Could not save to the gallery.'),
+  );
 }
 
 /// 从相册挑一张头像，连它报的类型一起带回；超过大小上限就用一句人话
@@ -59,10 +52,9 @@ Future<({Uint8List bytes, String type})?> pickAvatar(
   final bytes = await file.readAsBytes();
   if (bytes.length > LinkLimits.avatar) {
     if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(state.tr('头像不能超过 1 MB', 'Avatar must be at most 1 MB')),
-        ),
+      showTopHint(
+        context,
+        state.tr('头像不能超过 1 MB', 'Avatar must be at most 1 MB'),
       );
     }
     return null;
@@ -72,6 +64,28 @@ Future<({Uint8List bytes, String type})?> pickAvatar(
 
 Future<T?> openPage<T>(BuildContext context, Widget page) =>
     Navigator.of(context).push<T>(MaterialPageRoute(builder: (_) => page));
+
+/// 复制 [text]，提示 [note]（默认「已复制」）；复制失败如实提示。
+Future<void> copyWithNote(
+  BuildContext context,
+  AppState state,
+  String text, {
+  String? note,
+}) async {
+  var copied = true;
+  try {
+    await Clipboard.setData(ClipboardData(text: text));
+  } on Object {
+    copied = false;
+  }
+  if (!context.mounted) return;
+  showTopHint(
+    context,
+    copied
+        ? note ?? state.tr('已复制', 'Copied')
+        : state.tr('复制失败，请重试。', 'Copy failed. Please try again.'),
+  );
+}
 
 /// 页面、弹窗、底部面板盖上来时放掉输入框的焦点。Flutter 关上它们会把焦点
 /// 还给原来的输入框，键盘跟着焦点自己弹出来；在这里统一放掉，各处不用再管。
@@ -109,20 +123,17 @@ Future<T?> runUi<T>(
     return await action();
   } on Object catch (error) {
     if (!context.mounted) return null;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          errorMessage?.call(error) ??
-              switch (error) {
-                // 代码自己说好的话照原样显示，别的只说一句人话。
-                UserFacingError(:final message) => message,
-                _ => AppState.phrase(
-                  '操作没有成功，请稍后重试。',
-                  'That did not work. Try again in a moment.',
-                ),
-              },
-        ),
-      ),
+    showTopHint(
+      context,
+      errorMessage?.call(error) ??
+          switch (error) {
+            // 代码自己说好的话照原样显示，别的只说一句人话。
+            UserFacingError(:final message) => message,
+            _ => AppState.phrase(
+              '操作没有成功，请稍后重试。',
+              'That did not work. Try again in a moment.',
+            ),
+          },
     );
     return null;
   }

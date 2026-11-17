@@ -24,6 +24,7 @@ import '../user_message.dart';
 import '../widgets/earlier_messages.dart';
 import '../widgets/image_gallery.dart';
 import '../widgets/mobile_widgets.dart';
+import '../widgets/top_hint.dart';
 import 'bots_tab.dart';
 
 class GroupChatPage extends StatefulWidget {
@@ -962,9 +963,7 @@ class _GroupInfoPageState extends State<GroupInfoPage> {
         LinkBot(id: id, name: state.tr('已离群的 Bot', 'Former member')),
       );
 
-  void _hint(String message) => ScaffoldMessenger.of(context)
-    ..hideCurrentSnackBar()
-    ..showSnackBar(SnackBar(content: Text(message)));
+  void _hint(String message) => showTopHint(context, message);
 
   String _saveFailure(Object error) => error is GroupSettingsUnconfirmed
       ? state.tr(
@@ -1598,9 +1597,7 @@ Future<void> startGroupChat(
   } on Object catch (error) {
     if (!context.mounted) return;
     if (!saver.creationUnconfirmed) {
-      ScaffoldMessenger.of(context)
-        ..hideCurrentSnackBar()
-        ..showSnackBar(SnackBar(content: Text(userMessage(state, error))));
+      showTopHint(context, userMessage(state, error));
       return;
     }
     final refresh = await showDialog<bool>(
@@ -1630,9 +1627,7 @@ Future<void> startGroupChat(
       group = await _checkCreatedGroup(context, state, desktop, saver);
     } on Object catch (error) {
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context)
-        ..hideCurrentSnackBar()
-        ..showSnackBar(SnackBar(content: Text(userMessage(state, error))));
+      showTopHint(context, userMessage(state, error));
       return;
     }
   }

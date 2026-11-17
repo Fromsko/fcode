@@ -104,10 +104,22 @@ class _SubagentPageState extends State<SubagentPage> {
     builder: (context, _) => _page(context, _current()),
   );
 
+  /// 和卡片同名；电脑端悬停才看到的上游和完整 id 写在括号里。
+  String _modelText(String model) {
+    final (:label, :upstream) = AgentStep.modelName(
+      model,
+      listed: state.modelMenu(desktopId),
+    );
+    final detail = [?upstream, if (label != model) model].join(' · ');
+    if (detail.isEmpty) return label;
+    return state.tr('$label（$detail）', '$label ($detail)');
+  }
+
   Widget _page(BuildContext context, AgentItem item) {
     final meta = [
       if (item.agentType != null) (state.tr('类型', 'Type'), item.agentType!),
-      if (item.model != null) (state.tr('模型', 'Model'), item.model!),
+      if (item.model case final model?)
+        (state.tr('模型', 'Model'), _modelText(model)),
       if (item.tokens != null) ('token', AgentStep.formatTokens(item.tokens!)),
       if (item.toolUses != null)
         (state.tr('工具调用', 'Tool calls'), '${item.toolUses}'),

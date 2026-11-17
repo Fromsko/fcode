@@ -26,6 +26,13 @@ Map<String, Object?> offerWire(String uri) {
 }
 
 void main() {
+  test('头像和 Bot 资料的保存各走独立流，不堵住控制流', () {
+    expect(
+      LinkMethods.bulk,
+      containsAll([LinkMethods.setMe, LinkMethods.saveBot]),
+    );
+  });
+
   group('项目置顶兼容', () {
     test('新桌面的项目置顶经 JSON 往返保留', () {
       final project = ProjectInfo.fromJson({

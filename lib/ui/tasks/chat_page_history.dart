@@ -1,6 +1,10 @@
 // ignore_for_file: invalid_use_of_protected_member
 part of 'chat_page.dart';
 
+/// 用户自己发的消息；子智能体经 SendMessage 发来的不算。
+bool _typedByUser(Object? item) =>
+    item is UserMessageItem && item.fromAgent == null;
+
 /// 历史消息列表：跟随、翻页、在自己的消息之间跳转。
 extension _History on _ChatPageState {
   /// Follows the end of the stream. Never while the user has a finger on the
@@ -254,7 +258,7 @@ extension _History on _ChatPageState {
   /// The nearest message of mine before or after the wire [index].
   ChatRow? _nearestMine(int index, {required bool up}) {
     final mine = _rows.where(
-      (row) => !row.isFold && row.showItem && row.shown is UserMessageItem,
+      (row) => !row.isFold && row.showItem && _typedByUser(row.shown),
     );
     return up
         ? mine.where((row) => row.index < index).lastOrNull
@@ -537,7 +541,7 @@ extension _History on _ChatPageState {
 
   /// 项目对话的整段历史共用一个选中区；Bot 聊天各条自己可选中或长按。
   Widget _selectableHistory(Widget child) =>
-      widget.botId == null ? SelectionArea(child: child) : child;
+      widget.botId == null ? ScrollingSelectionArea(child: child) : child;
 
   Widget _historyItem(
     BuildContext context,
@@ -578,6 +582,7 @@ extension _History on _ChatPageState {
                   return BotWorkFold(
                     key: ValueKey('work-${row.index}'),
                     worked: work.worked ?? Duration.zero,
+                    stopped: work.stopped,
                     tr: tr,
                     at: row.at,
                     onOpen: row.foldItems.isEmpty
@@ -599,6 +604,7 @@ extension _History on _ChatPageState {
                     WorkFoldLine(
                       key: ValueKey('work-${row.index}'),
                       worked: work.worked ?? Duration.zero,
+                      stopped: work.stopped,
                       edits: turnEdits(row.foldItems),
                       expanded: expanded,
                       onToggle: toggle,
@@ -626,7 +632,7 @@ extension _History on _ChatPageState {
                   widget.botId != null &&
                   sentAt != null &&
                   ChatTimeLine.between(previousTime, sentAt);
-              final mine = widget.botId == null && raw is UserMessageItem;
+              final mine = widget.botId == null && _typedByUser(raw);
               final hasPrevious = mine && _nearestMine(index, up: true) != null;
               final moreEarlier =
                   buffer.earlier == true && _online && _editIndex == null;
@@ -689,7 +695,8 @@ extension _History on _ChatPageState {
     _marksAfter.clear();
     final sent = [
       for (final (position, row) in rows.indexed)
-        if (row.shown case UserMessageItem(:final sentAt?)) (position, sentAt),
+        if (row.shown case UserMessageItem(:final sentAt?, fromAgent: null))
+          (position, sentAt),
     ];
     for (final mark in widget.state.modelMarks(widget.desktopId, _sessionId)) {
       if (buffer.earlier == true &&

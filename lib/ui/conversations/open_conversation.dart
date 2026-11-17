@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../state/app_state.dart';
 import '../tasks/chat_page.dart';
 import '../widgets/mobile_widgets.dart';
+import '../widgets/top_hint.dart';
 
 class ConversationDestination {
   const ConversationDestination({
@@ -47,14 +48,11 @@ Future<void> openConversation(
   required String sessionId,
 }) async {
   if (!state.isOnline(desktopId)) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          state.tr(
-            '电脑不在线，暂时无法打开该对话。',
-            'The desktop is offline; the chat cannot be opened now.',
-          ),
-        ),
+    showTopHint(
+      context,
+      state.tr(
+        '电脑不在线，暂时无法打开该对话。',
+        'The desktop is offline; the chat cannot be opened now.',
       ),
     );
     return;

@@ -244,6 +244,9 @@ class ToolCallRow extends StatelessWidget {
       onToggle: _opens ? onToggle : null,
       onOpen: file == null ? null : () => onOpenFile!(file),
       openTooltip: file == null ? null : s.openFile,
+      trailing: !expanded && _images.isNotEmpty
+          ? StepThumbnails(images: _images)
+          : null,
       icon: switch (kind) {
         // A message to another agent: someone speaking, standing out.
         ToolKind.message => SvgPicture.asset(
@@ -287,7 +290,7 @@ class ToolCallRow extends StatelessWidget {
                     style: stepMono(context),
                   ),
           ),
-        if (_images.isNotEmpty) ...[
+        if (expanded && _images.isNotEmpty) ...[
           const SizedBox(height: 6),
           ToolImages(images: _images),
         ],

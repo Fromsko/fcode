@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:bao_link/bao_link.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
 import '../../link/phone_link.dart';
@@ -12,6 +11,7 @@ import '../../state/app_state.dart';
 import '../../theme/app_theme.dart';
 import '../widgets/lucide_icon.dart';
 import '../widgets/mobile_widgets.dart';
+import '../widgets/top_hint.dart';
 import 'device_menu.dart';
 import 'qr_scan_view.dart';
 import '../../models/user_facing_error.dart';
@@ -501,7 +501,7 @@ class _DevicePageState extends State<DevicePage> {
             trailing: IconButton(
               tooltip: state.tr('复制地址', 'Copy address'),
               icon: const LucideIcon('copy', size: 18),
-              onPressed: () => _copyAddress(context, address),
+              onPressed: () => copyWithNote(context, state, address),
             ),
           ),
         ListTile(
@@ -534,13 +534,6 @@ class _DevicePageState extends State<DevicePage> {
         ),
       ],
     );
-  }
-
-  Future<void> _copyAddress(BuildContext context, String address) async {
-    await Clipboard.setData(ClipboardData(text: address));
-    if (!context.mounted) return;
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text(state.tr('已复制', 'Copied'))));
   }
 
   /// 改保存的连接地址，一次一行（或逗号隔开）。
@@ -697,13 +690,7 @@ class _PairDevicePageState extends State<PairDevicePage> {
     }
   }
 
-  void _toast(String message) {
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(content: Text(message), behavior: SnackBarBehavior.floating),
-      );
-  }
+  void _toast(String message) => showTopHint(context, message);
 
   Future<void> _pair(Future<PairingAttempt> Function() begin) async {
     if (_working) return;

@@ -1,3 +1,4 @@
+import 'package:baocode_mobile/ui/widgets/image_gallery.dart';
 import 'package:baocode_mobile/ui/widgets/mobile_widgets.dart';
 import 'package:baocode_mobile/chat/markdown/mermaid_code_block.dart';
 import 'package:baocode_mobile/chat/markdown/code_citation.dart';
@@ -73,10 +74,12 @@ void main() {
       await Future<void>.delayed(const Duration(milliseconds: 200));
     });
     await tester.pumpAndSettle();
+    // 全屏走统一的看图器：整张放进屏幕，能缩放、存相册。
+    expect(find.byType(ImageGalleryPage), findsOneWidget);
     expect(find.text('Mermaid'), findsOneWidget);
-    await tester.tap(find.byTooltip('Close'));
+    await tester.tap(find.byType(BackButton));
     await tester.pumpAndSettle();
-    expect(find.text('Mermaid'), findsNothing);
+    expect(find.byType(ImageGalleryPage), findsNothing);
     expect(focus.hasFocus, isFalse);
   });
   testWidgets('incomplete diagrams retain source without a crashing painter', (

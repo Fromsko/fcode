@@ -100,6 +100,33 @@ void main() {
     expect(again.modelMarks('demo-desktop', 'a'), hasLength(1));
   });
 
+  test('电脑模型菜单按名字和上游列出，供子代理的模型取名', () async {
+    final state = _Switching(MemoryLinkStore(), _session('a', DateTime(2026)));
+    addTearDown(state.dispose);
+    state.followed.choices = [
+      const LinkChoice(
+        kind: 'model',
+        selected: '@openai/gpt-6.1-sol',
+        options: [
+          LinkOption(
+            id: '@openai/gpt-6.1-sol',
+            label: 'GPT-6.1-sol',
+            group: 'openai',
+            groupLabel: 'OpenAI',
+          ),
+        ],
+      ),
+      const LinkChoice(
+        kind: 'mode',
+        options: [LinkOption(id: 'plan', label: 'Plan')],
+      ),
+    ];
+    expect(state.modelMenu('demo-desktop'), [
+      (id: '@openai/gpt-6.1-sol', label: 'GPT-6.1-sol', upstream: 'OpenAI'),
+    ]);
+    expect(state.modelMenu('other-desktop'), isEmpty);
+  });
+
   test('对话的模型重启后还记得；电脑正在说的优先', () async {
     final store = MemoryLinkStore();
     await store.write(

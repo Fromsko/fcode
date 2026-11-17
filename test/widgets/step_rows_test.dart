@@ -354,4 +354,88 @@ void main() {
     await tester.pump();
     expect(find.byType(LiveSelectableText), findsNothing);
   });
+
+  testWidgets('子代理发来的消息显示成它的卡片，不是我的气泡，也不能编辑', (tester) async {
+    final state = ChatTestState(zh: true);
+    addTearDown(state.dispose);
+    var edited = false;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: MessageView(
+            state: state,
+            desktopId: 'desktop',
+            item: const {'t': 'user', 'text': '依赖都已更新', 'agent': '检查依赖'},
+            index: 0,
+            projectId: 'project',
+            onEdit: (_) => edited = true,
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    expect(find.text('检查依赖'), findsOneWidget);
+    expect(find.textContaining('发来消息'), findsOneWidget);
+    expect(find.textContaining('依赖都已更新', findRichText: true), findsWidgets);
+    expect(find.byKey(const ValueKey('user-message-bubble')), findsNothing);
+    expect(find.byTooltip('编辑并重新发送'), findsNothing);
+    expect(edited, isFalse);
+    expect(
+      chatItemPlainText(
+        const UserMessageItem(text: '依赖都已更新', fromAgent: '检查依赖'),
+      ),
+      '检查依赖: 依赖都已更新',
+    );
+  });
+
+  testWidgets('子代理卡片按电脑模型菜单显示模型名，查不到时 Claude 模型写成系列和版本', (tester) async {
+    String name(String model) => AgentStep.modelName(model).label;
+    expect(name('claude-haiku-5-5-20261001'), 'Haiku 5.5');
+    expect(name('claude-opus-5-5[1m]'), 'Opus 5.5');
+    expect(name('claude-3-5-sonnet-20240620'), 'Sonnet 3.5');
+    expect(name('@deepseek/deepseek-v4'), 'deepseek-v4');
+    expect(name('gpt-6.1-sol'), 'gpt-6.1-sol');
+
+    const menu = [
+      (id: '@openai/gpt-6.1-sol', label: 'GPT-6.1-sol', upstream: 'OpenAI'),
+      (id: 'opus', label: 'Opus', upstream: null),
+    ];
+    expect(AgentStep.modelName('gpt-6.1-sol', listed: menu), (
+      label: 'GPT-6.1-sol',
+      upstream: 'OpenAI',
+    ));
+    expect(
+      AgentStep.modelName('@relay/gpt-6.1-sol', listed: menu).label,
+      'gpt-6.1-sol',
+      reason: '指明了别的上游，不借用这个上游的名字',
+    );
+    expect(
+      AgentStep.modelName(
+        'gpt-6.1-sol',
+        listed: [
+          ...menu,
+          (id: '@relay/gpt-6.1-sol', label: 'GPT-6.1-sol', upstream: 'Relay'),
+        ],
+      ),
+      (label: 'GPT-6.1-sol', upstream: null),
+      reason: '两个上游都有同名模型时不说是哪个',
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: AgentStep(
+            item: AgentItem(
+              description: 'Explore the repo',
+              status: CommandStatus.succeeded,
+              model: 'gpt-6.1-sol',
+            ),
+            modelMenu: menu,
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    expect(find.text('GPT-6.1-sol'), findsOneWidget);
+  });
 }

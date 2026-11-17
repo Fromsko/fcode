@@ -9,6 +9,7 @@ import 'package:baocode_mobile/ui/conversations/chats_tab.dart';
 import 'package:baocode_mobile/ui/files/files_tab.dart';
 import 'package:baocode_mobile/ui/tasks/chat_page.dart';
 import 'package:baocode_mobile/chat/widgets/pixel_loader.dart';
+import 'package:baocode_mobile/theme/app_theme.dart';
 import 'package:baocode_mobile/ui/widgets/lucide_icon.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -174,11 +175,10 @@ void main() {
 
   testWidgets('项目和对话用统一的状态文字，不再放运行动画', (tester) async {
     final state = _State()..status = LinkSessionStatus.running;
-    state.settings.homeSessions.add(('在线', '会话甲'));
     addTearDown(state.dispose);
     await tester.pumpWidget(MaterialApp(home: ChatsTab(state: state)));
     expect(find.byType(PixelLoader), findsNothing);
-    // 会话甲放到了首页，只在首页自己那行标；项目行只算没上首页的会话乙。
+    // 会话甲置顶，在最上面自己那行标；项目行只算没置顶的会话乙。
     final line = find.textContaining('1 个待处理');
     expect(line, findsOneWidget);
     expect(find.textContaining('1 个运行中'), findsNothing);
@@ -188,7 +188,7 @@ void main() {
       (spans[0] as TextSpan).style!.color,
       Theme.of(context).colorScheme.error,
     );
-    // 首页上的对话行只标自己的状态。
+    // 置顶的对话行只标自己的状态，后面是它的项目。
     expect(find.textContaining('运行中 · 项目甲'), findsOneWidget);
     // 等着用户的数挂在头像上：项目行 1（会话乙待处理），还在跑的会话甲不挂。
     final marks = tester
@@ -197,57 +197,33 @@ void main() {
         .map((badge) => (badge.label! as Text).data)
         .toList();
     expect(marks, ['1']);
-    // 点进项目：会话甲标着「首页」，状态灰着、头像不挂数（它还在跑，
-    // 没等着用户，也就没有灰点）。
+    // 项目页是这个项目的全部对话：置顶的也在，状态照常上色，不再有「首页」。
     await tester.tap(find.textContaining('项目甲（'));
     await tester.pumpAndSettle();
-    expect(find.text('首页'), findsOneWidget);
-    expect(
-      tester
-          .widget<Badge>(find.byKey(const ValueKey('home-waiting-dot-在线-会话甲')))
-          .isLabelVisible,
-      isFalse,
-    );
+    expect(find.text('首页'), findsNothing);
     final running = find.textContaining('运行中');
     expect(
       ((tester.widget<Text>(running).textSpan! as TextSpan).children!.first
               as TextSpan)
           .style!
           .color,
-      Theme.of(tester.element(running)).hintColor,
+      MobileTheme.statusColorsOf(tester.element(running)).info,
     );
   });
 
-  testWidgets('放到首页的对话在项目里只挂灰点，红数只出现在首页那行', (tester) async {
-    final state = _State();
-    state.settings.homeSessions.add(('在线', '会话乙'));
+  testWidgets('置顶对话的红数只在它自己那行，项目行不再算它', (tester) async {
+    final state = _State()..status = LinkSessionStatus.needsInput;
     addTearDown(state.dispose);
     await tester.pumpWidget(MaterialApp(home: ChatsTab(state: state)));
-    // 首页那行：红色的数，要用户处理。
-    final homeRow = find.byKey(const ValueKey('home-在线-会话乙'));
-    final homeBadge = tester.widget<Badge>(
-      find.descendant(of: homeRow, matching: find.byType(Badge)),
-    );
-    expect(homeBadge.isLabelVisible, isTrue);
-    expect((homeBadge.label! as Text).data, '1');
-    // 项目行不再数它：没有别的会话在等。
-    final projectRow = find.byKey(const ValueKey('project-在线-p'));
-    expect(
-      tester
-          .widgetList<Badge>(
-            find.descendant(of: projectRow, matching: find.byType(Badge)),
-          )
-          .where((badge) => badge.isLabelVisible),
-      isEmpty,
-    );
-    // 点进项目：它只有个灰点，没有数。
-    await tester.tap(find.textContaining('项目甲（'));
-    await tester.pumpAndSettle();
-    final dot = tester.widget<Badge>(
-      find.byKey(const ValueKey('home-waiting-dot-在线-会话乙')),
-    );
-    expect(dot.isLabelVisible, isTrue);
-    expect(dot.label, isNull);
+    int? count(Finder row) => tester
+        .widgetList<Badge>(
+          find.descendant(of: row, matching: find.byType(Badge)),
+        )
+        .where((badge) => badge.isLabelVisible && badge.label != null)
+        .map((badge) => int.parse((badge.label! as Text).data!))
+        .firstOrNull;
+    expect(count(find.byKey(const ValueKey('pinned-在线-会话甲'))), 1);
+    expect(count(find.byKey(const ValueKey('project-在线-p'))), 1);
   });
 
   testWidgets('点标题弹出电脑列表，显示连接方式与断线，切换后只显示那台电脑', (tester) async {
@@ -295,18 +271,19 @@ void main() {
     expect(state.retries, ['在线']);
   });
 
-  testWidgets('对话页只列项目与首页对话，不再列 Bot', (tester) async {
+  testWidgets('对话页只列置顶对话与项目，不再列 Bot', (tester) async {
     final state = _State()..withBot = true;
     addTearDown(state.dispose);
     await tester.pumpWidget(MaterialApp(home: ChatsTab(state: state)));
     double top(String text) => tester.getTopLeft(find.text(text)).dy;
-    expect(top('项目甲（2）'), lessThan(top('空项目')));
+    expect(top('置顶任务'), lessThan(top('项目甲（1）')));
+    expect(top('项目甲（1）'), lessThan(top('空项目')));
     // Bot 都在 Bot 页。
     expect(find.text('小宝'), findsNothing);
     expect(find.text('审稿 Bot'), findsNothing);
   });
 
-  testWidgets('只置顶的对话留在项目里；放到首页后与项目同层，置顶的排在最顶', (tester) async {
+  testWidgets('置顶的对话排在项目上面、不算在项目里；取消置顶后回到项目里', (tester) async {
     final state = _State();
     addTearDown(state.dispose);
     await tester.pumpWidget(
@@ -317,30 +294,21 @@ void main() {
         ),
       ),
     );
-    final row = find.byKey(const ValueKey('home-在线-会话甲'));
-    // 会话甲已置顶，但没放到首页：首页只有项目。
-    expect(row, findsNothing);
-
-    await state.setOnHome(
-      state.sessions.firstWhere((ref) => ref.session.id == '会话甲'),
-      true,
-    );
-    await tester.pump();
+    final row = find.byKey(const ValueKey('pinned-在线-会话甲'));
     expect(row, findsOneWidget);
     expect(
       tester.getTopLeft(row).dy,
-      lessThan(tester.getTopLeft(find.text('项目甲（2）')).dy),
+      lessThan(tester.getTopLeft(find.text('项目甲（1）')).dy),
     );
     expect(find.textContaining('在线电脑 ·'), findsNothing);
 
     await tester.longPress(row);
     await tester.pumpAndSettle();
-    expect(find.text('取消置顶'), findsOneWidget);
-    await tester.tap(find.text('从首页移除'));
+    expect(find.text('放到首页'), findsNothing);
+    await tester.tap(find.text('取消置顶'));
     await tester.pumpAndSettle();
+    expect(state.calls.single, {'session': '会话甲', 'pinned': false});
     expect(row, findsNothing);
-    // 放到首页只是手机自己的选择，不发请求。
-    expect(state.calls, isEmpty);
     expect(find.text('项目甲（2）'), findsOneWidget);
   });
   testWidgets('首页没有筛选按钮，搜索项目名只留下该项目，清除后恢复', (tester) async {
@@ -351,19 +319,19 @@ void main() {
     expect(find.text('空项目'), findsOneWidget);
     await tester.enterText(find.byType(TextField), '项目甲');
     await tester.pumpAndSettle();
-    expect(find.text('项目甲（2）'), findsOneWidget);
+    expect(find.text('项目甲（1）'), findsOneWidget);
+    expect(find.text('置顶任务'), findsOneWidget, reason: '置顶对话按它的项目名也能搜到');
     expect(find.text('空项目'), findsNothing);
     await tester.tap(find.text('清除'));
     await tester.pumpAndSettle();
     expect(find.text('空项目'), findsOneWidget);
     expect(state.calls, isEmpty);
   });
-  testWidgets('点击首页上的对话直接打开正确会话', (tester) async {
+  testWidgets('点击首页上的置顶对话直接打开正确会话', (tester) async {
     final state = _State();
-    state.settings.homeSessions.add(('在线', '会话甲'));
     addTearDown(state.dispose);
     await tester.pumpWidget(MaterialApp(home: ChatsTab(state: state)));
-    await tester.tap(find.byKey(const ValueKey('home-在线-会话甲')));
+    await tester.tap(find.byKey(const ValueKey('pinned-在线-会话甲')));
     await tester.pumpAndSettle();
     expect(tester.widget<ChatPage>(find.byType(ChatPage)).sessionId, '会话甲');
     await tester.pumpWidget(const SizedBox.shrink());
@@ -461,8 +429,12 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.bySemanticsLabel('收起对话'), findsOneWidget);
     expect(find.byType(ProjectChatsPage), findsNothing);
-    expect(find.text('项目甲（2）'), findsOneWidget);
-    expect(find.byKey(const ValueKey('session-在线-会话甲')), findsOneWidget);
+    expect(find.text('项目甲（1）'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('session-在线-会话甲')),
+      findsNothing,
+      reason: '置顶的会话甲在最上面，不在项目里',
+    );
     expect(find.byKey(const ValueKey('session-在线-会话乙')), findsOneWidget);
     // 右下角一整块都算点箭头：离图标远一点也只收起，不进项目。
     final corner = tester.getBottomRight(
@@ -482,7 +454,7 @@ void main() {
     final dots = find.byKey(const ValueKey('pull-refresh-dots'));
     expect(tester.getSize(dots).height, 0);
 
-    await tester.drag(find.text('项目甲（2）'), const Offset(0, 120));
+    await tester.drag(find.text('项目甲（1）'), const Offset(0, 120));
     await tester.pump();
     expect(state.refreshed, ['在线']);
     // 刷新没结束，灰点留在上面并持续动。
@@ -494,7 +466,7 @@ void main() {
     state.refreshing!.complete();
     await tester.pumpAndSettle();
     expect(tester.getSize(dots).height, 0);
-    expect(find.text('项目甲（2）'), findsOneWidget);
+    expect(find.text('项目甲（1）'), findsOneWidget);
   });
 
   testWidgets('轻轻下拉距离不够，不刷新', (tester) async {
@@ -502,7 +474,7 @@ void main() {
     addTearDown(state.dispose);
     await tester.pumpWidget(MaterialApp(home: ChatsTab(state: state)));
     await tester.pumpAndSettle();
-    await tester.drag(find.text('项目甲（2）'), const Offset(0, 30));
+    await tester.drag(find.text('项目甲（1）'), const Offset(0, 30));
     await tester.pumpAndSettle();
     expect(state.refreshed, isEmpty);
   });

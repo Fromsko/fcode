@@ -3,7 +3,6 @@ import 'dart:async';
 
 import 'package:bao_link/bao_link.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 import '../../chat/message_view.dart';
 import '../../state/app_state.dart';
@@ -12,6 +11,8 @@ import '../../theme/material_file_icons.dart' as material_icons;
 import '../files/files_tab.dart';
 import '../widgets/lucide_icon.dart';
 import '../widgets/fold_row.dart';
+import '../widgets/mobile_widgets.dart' show copyWithNote;
+import '../widgets/top_hint.dart';
 import '../user_message.dart';
 
 /// 会话中尚未保留的改动，顶部居中提供批量操作，每个文件也能单独处理。
@@ -451,21 +452,12 @@ class ChangeFileRow extends StatelessWidget {
 
   String get path => '${change['path'] ?? ''}';
 
-  Future<void> _copyPath(BuildContext context) async {
-    try {
-      await Clipboard.setData(ClipboardData(text: path));
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(state.tr('路径已复制', 'Path copied'))),
-        );
-      }
-    } on Object catch (error) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(userMessage(state, error))));
-      }
-    }
-  }
+  Future<void> _copyPath(BuildContext context) => copyWithNote(
+    context,
+    state,
+    path,
+    note: state.tr('路径已复制', 'Path copied'),
+  );
 
   void _showPath(BuildContext context) => showDialog<void>(
     context: context,
@@ -744,14 +736,11 @@ void openChangeDiff(
         .firstOrNull;
   }
   if (project == null || project.isEmpty) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          tr(
-            '无法确定此会话所属项目，暂时不能查看差异。',
-            'Cannot determine this conversation\'s project, so the diff is unavailable.',
-          ),
-        ),
+    showTopHint(
+      context,
+      tr(
+        '无法确定此会话所属项目，暂时不能查看差异。',
+        'Cannot determine this conversation\'s project, so the diff is unavailable.',
       ),
     );
     return;

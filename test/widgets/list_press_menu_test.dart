@@ -11,6 +11,7 @@ import 'package:baocode_mobile/ui/files/files_tab.dart';
 import 'package:baocode_mobile/ui/widgets/lucide_icon.dart';
 import 'package:baocode_mobile/ui/widgets/mobile_widgets.dart' show ListRow;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 class _State extends AppState {
@@ -134,6 +135,30 @@ Finder _row(String title) => find.byWidgetPredicate(
 
 Finder get _menu => find.byKey(const ValueKey('dropdown-panel'));
 
+/// 打开的长按菜单里各项的文字，从上到下。
+List<String> _menuLabels(WidgetTester tester) => [
+  for (final text in tester.widgetList<Text>(
+    find.descendant(of: _menu, matching: find.byType(Text)),
+  ))
+    ?text.data,
+];
+
+/// 截下写进剪贴板的文字，测试结束还原。
+List<String> _mockClipboard(WidgetTester tester) {
+  final copied = <String>[];
+  final messenger = tester.binding.defaultBinaryMessenger;
+  messenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
+    if (call.method == 'Clipboard.setData') {
+      copied.add((call.arguments as Map)['text'] as String);
+    }
+    return null;
+  });
+  addTearDown(
+    () => messenger.setMockMethodCallHandler(SystemChannels.platform, null),
+  );
+  return copied;
+}
+
 Future<void> _press(WidgetTester tester, String title) async {
   await tester.longPress(_row(title));
   await tester.pumpAndSettle();
@@ -156,7 +181,7 @@ void main() {
     expect(find.text('置顶'), findsNothing);
     await _press(tester, '项目甲');
     expect(state.calls, isEmpty);
-    expect(find.text('删除该项目'), findsOneWidget);
+    expect(find.text('从列表移除'), findsOneWidget);
     await tester.tap(find.text('置顶'));
     await tester.pumpAndSettle();
     expect(_menu, findsNothing);
@@ -167,17 +192,17 @@ void main() {
     expect(state.calls.last.$3, {'project': 'project', 'pinned': false});
   });
 
-  testWidgets('删除该项目须确认且明确不删除文件和对话', (tester) async {
+  testWidgets('从列表移除项目须确认且明确不删除文件和对话', (tester) async {
     final state = _State();
     addTearDown(state.dispose);
     await tester.pumpWidget(_host(state));
-    await _pick(tester, '项目甲', '删除该项目');
+    await _pick(tester, '项目甲', '从列表移除');
     expect(find.textContaining('不删除文件或对话'), findsOneWidget);
     expect(state.calls, isEmpty);
     await tester.tap(find.text('取消'));
     await tester.pumpAndSettle();
     expect(state.calls, isEmpty);
-    await _pick(tester, '项目甲', '删除该项目');
+    await _pick(tester, '项目甲', '从列表移除');
     await tester.tap(find.widgetWithText(FilledButton, '移除'));
     await tester.pumpAndSettle();
     expect(state.calls.single.$2, LinkMethods.hideProject);
@@ -190,7 +215,58 @@ void main() {
     await tester.pumpWidget(_host(state, files: true));
     await _press(tester, '项目甲');
     expect(find.text('置顶'), findsNothing);
-    expect(find.text('删除该项目'), findsOneWidget);
+    expect(find.text('从列表移除'), findsOneWidget);
+  });
+
+  testWidgets('项目长按菜单和电脑一样排序，复制路径不请求电脑，离线只剩复制路径', (tester) async {
+    final copied = _mockClipboard(tester);
+    final state = _State();
+    addTearDown(state.dispose);
+    await tester.pumpWidget(_host(state));
+    await _press(tester, '项目甲');
+    expect(_menuLabels(tester), ['新对话', '浏览文件', '置顶', '复制路径', '全部归档', '从列表移除']);
+    await tester.tap(find.text('复制路径'));
+    await tester.pumpAndSettle();
+    expect(copied, ['/project']);
+    expect(find.text('已复制'), findsOneWidget);
+    expect(state.calls, isEmpty);
+
+    state.online = false;
+    state.notifyListeners();
+    await tester.pumpAndSettle();
+    await _press(tester, '项目甲');
+    expect(_menuLabels(tester), ['复制路径']);
+  });
+
+  testWidgets('全部归档须确认，确认后逐个归档该项目的对话', (tester) async {
+    final state = _State();
+    addTearDown(state.dispose);
+    await tester.pumpWidget(_host(state));
+    await _pick(tester, '项目甲', '全部归档');
+    expect(find.textContaining('2 段对话'), findsOneWidget);
+    await tester.tap(find.text('取消'));
+    await tester.pumpAndSettle();
+    expect(state.calls, isEmpty);
+    await _pick(tester, '项目甲', '全部归档');
+    await tester.tap(find.widgetWithText(FilledButton, '归档'));
+    await tester.pumpAndSettle();
+    expect(
+      [for (final call in state.calls) '${call.$2} ${call.$3['session']}'],
+      ['${LinkMethods.archive} session', '${LinkMethods.archive} other'],
+    );
+  });
+
+  testWidgets('项目长按能新建对话和浏览文件', (tester) async {
+    final state = _State();
+    addTearDown(state.dispose);
+    await tester.pumpWidget(_host(state));
+    await _pick(tester, '项目甲', '浏览文件');
+    expect(find.byType(FilesPage), findsOneWidget);
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    await _pick(tester, '项目甲', '新对话');
+    final draft = state.calls.where((call) => call.$2 == LinkMethods.draft);
+    expect(draft.single.$3['project'], 'project');
   });
 
   testWidgets('项目内对话长按置顶与删除，取消删除不发请求', (tester) async {
@@ -218,15 +294,17 @@ void main() {
     expect(find.text('对话乙'), findsOneWidget);
   });
 
-  testWidgets('首页对话从首页移除不删除电脑上的对话', (tester) async {
-    final state = _State();
-    state.settings.homeSessions.add(('desk', 'session'));
+  testWidgets('首页置顶对话长按取消置顶后回到项目里，菜单没有放到首页', (tester) async {
+    final state = _State()..sessionPinned = true;
     addTearDown(state.dispose);
     await tester.pumpWidget(_host(state));
-    await _pick(tester, '对话甲', '从首页移除');
-    expect(state.calls, isEmpty);
-    expect(state.settings.homeSessions, isEmpty);
-    expect(_row('对话甲'), findsNothing);
+    expect(find.byKey(const ValueKey('pinned-desk-session')), findsOneWidget);
+    await _press(tester, '对话甲');
+    expect(find.text('放到首页'), findsNothing);
+    await tester.tap(find.text('取消置顶'));
+    await tester.pumpAndSettle();
+    expect(state.calls.single.$3, {'session': 'session', 'pinned': false});
+    expect(find.byKey(const ValueKey('pinned-desk-session')), findsNothing);
     expect(state.sessions.map((ref) => ref.session.id), contains('session'));
   });
 
@@ -280,15 +358,13 @@ void main() {
     expect(shade(), isNull);
   });
 
-  testWidgets('离线只留手机自己的操作，失败后保留行并显示错误', (tester) async {
+  testWidgets('离线时对话长按只剩复制会话 ID，失败后保留行并显示错误', (tester) async {
     final state = _State()..online = false;
     addTearDown(state.dispose);
     await tester.pumpWidget(_host(state, project: true));
     await _press(tester, '对话甲');
-    expect(find.text('删除该聊天'), findsNothing);
-    expect(find.text('置顶'), findsNothing);
-    expect(find.text('放到首页'), findsOneWidget);
-    await tester.tapAt(const Offset(2, 590));
+    expect(_menuLabels(tester), ['复制会话 ID'], reason: '其余操作都要电脑在线');
+    await tester.tapAt(const Offset(2, 2));
     await tester.pumpAndSettle();
     state
       ..online = true
@@ -298,6 +374,20 @@ void main() {
     await _pick(tester, '对话甲', '置顶');
     expect(find.textContaining('合成操作失败'), findsOneWidget);
     expect(find.text('对话甲'), findsOneWidget);
+  });
+
+  testWidgets('对话长按菜单和电脑一样排序，复制会话 ID 不请求电脑', (tester) async {
+    final copied = _mockClipboard(tester);
+    final state = _State();
+    addTearDown(state.dispose);
+    await tester.pumpWidget(_host(state, project: true));
+    await _press(tester, '对话甲');
+    expect(_menuLabels(tester), ['重命名', '置顶', '归档', '复制会话 ID', '删除该聊天']);
+    await tester.tap(find.text('复制会话 ID'));
+    await tester.pumpAndSettle();
+    expect(copied, ['session']);
+    expect(find.text('已复制'), findsOneWidget);
+    expect(state.calls, isEmpty);
   });
 
   testWidgets('窄屏大字号不溢出，进行中的请求不会重复提交', (tester) async {

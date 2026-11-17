@@ -66,9 +66,7 @@ class _BotProfileViewState extends State<_BotProfileView> {
     }
   }
 
-  void _hint(String message) => ScaffoldMessenger.of(context)
-    ..hideCurrentSnackBar()
-    ..showSnackBar(SnackBar(content: Text(message)));
+  void _hint(String message) => showTopHint(context, message);
 
   /// The desktop keeps a bot whole: each save sends all of it.
   Future<void> _save({

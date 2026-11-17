@@ -59,6 +59,19 @@ class _LiveState extends AppState {
   void changed() => notifyListeners();
 }
 
+class _MenuState extends AppState {
+  _MenuState() : super(demo: true) {
+    settings.language = 'zh';
+  }
+
+  @override
+  List<({String id, String label, String? upstream})> modelMenu(
+    String desktopId,
+  ) => const [
+    (id: '@openai/gpt-6.1-sol', label: 'GPT-6.1-sol', upstream: 'OpenAI'),
+  ];
+}
+
 void main() {
   const running = AgentItem(
     id: 'tool-live',
@@ -224,6 +237,26 @@ void main() {
       findsNothing,
       reason: 'the detail page is strictly read-only',
     );
+  });
+
+  testWidgets('详情页的模型和卡片同名，括号里写上游和完整 id', (tester) async {
+    final state = _MenuState();
+    addTearDown(state.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SubagentPage(
+          state: state,
+          desktopId: 'desktop',
+          item: const AgentItem(
+            description: '查依赖',
+            status: CommandStatus.succeeded,
+            model: 'gpt-6.1-sol',
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    expect(find.text('模型 · GPT-6.1-sol（OpenAI · gpt-6.1-sol）'), findsOneWidget);
   });
 
   testWidgets('the stream card opens the read-only detail page', (

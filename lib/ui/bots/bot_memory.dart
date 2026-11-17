@@ -89,13 +89,10 @@ class _BotMemoryPageState extends State<BotMemoryPage> {
             '${entry.key == LinkMethods.setBotMemory ? widget.state.tr('关于你', 'About you') : widget.state.tr('关于它自己', 'About itself')}: '
                 '${botSaveFailureMessage(entry.value, widget.state.tr)}',
         ].join('\n');
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              '${result.saved.isNotEmpty ? widget.state.tr('其他变更已保存。\n', 'Other changes were saved.\n') : ''}'
-              '$failures\n${widget.state.tr('内容已保留，不会自动重试。', 'Content is kept; no automatic retry.')}',
-            ),
-          ),
+        showTopHint(
+          context,
+          '${result.saved.isNotEmpty ? widget.state.tr('其他变更已保存。\n', 'Other changes were saved.\n') : ''}'
+          '$failures\n${widget.state.tr('内容已保留，不会自动重试。', 'Content is kept; no automatic retry.')}',
         );
       }
     } finally {

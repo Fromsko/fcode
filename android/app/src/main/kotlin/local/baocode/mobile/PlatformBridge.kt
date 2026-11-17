@@ -22,6 +22,7 @@ import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
 import android.view.HapticFeedbackConstants
+import android.webkit.MimeTypeMap
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.plugin.common.BinaryMessenger
 import io.flutter.plugin.common.EventChannel
@@ -231,7 +232,10 @@ class PlatformBridge(
         try {
             host.startActivityForResult(Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
                 addCategory(Intent.CATEGORY_OPENABLE)
-                type = "application/octet-stream"
+                // 类型与扩展名不符时，系统保存器会按类型补扩展名（如 .jpg 变 .jpg.bin）。
+                type = MimeTypeMap.getSingleton()
+                    .getMimeTypeFromExtension(name.substringAfterLast('.', "").lowercase())
+                    ?: "application/octet-stream"
                 putExtra(Intent.EXTRA_TITLE, name)
             }, SAVE_DOCUMENT)
         } catch (_: Exception) {

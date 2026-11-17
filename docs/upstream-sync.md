@@ -6,6 +6,7 @@ YCode 是独立的非官方 Android 客户端，不是官方手机端的分支�
 
 - `vendor/bao_link`、`vendor/bao_iroh` 来自 [BaoCode](https://github.com/baocode-dev/baocode) 官方提交 `4ba7d951`（1.9.4 之后）的 `packages/` 目录，Dart 与 Rust 绑定成对同步。
 - 只多一个可选方法 `quota`（额度查询），声明在 `vendor/bao_link/lib/src/protocol.dart`。官方电脑端不支持时，手机端只显示「此电脑不支持额度查询」，不影响聊天、文件和 Bot；超时、断线这类真实错误照常报失败。
+- `LinkMethods.bulk` 选择性对齐官方 `b59bb984`：`setMe`、`saveBot` 也各走独立流，最大 1 MiB 的头像不再堵住控制流。电脑端对独立流上的任何请求都照常应答，旧电脑同样适用；代价是回复不再保证排在控制流的 `state` 之后，保存 Bot 一律以回复里的 Bot 为准，列表随后由 `state` 刷新。
 - `vendor/bao_link/lib/src/peer.dart` 有本地连接恢复修补：请求写失败及时返回，独立流写失败复位该流，无等待方的控制消息写失败结束连接；独立流超时包含开流等待，迟到的流不再发送请求。回前台的 `state` 探测使用电脑端已支持的独立请求流，避免排在大历史回复之后；`open`、`earlier` 与会话增量仍在控制流保持顺序。256 KiB 及以上的消息在工作 isolate 解析，控制流按原顺序应用结果。不改变 link v2 的消息格式，不自动重发请求；这些不是上述官方提交自带的改动。
 - 排队消息由手机端在本地保存和发送，不需要协议扩展。
 
@@ -21,6 +22,8 @@ YCode 是独立的非官方 Android 客户端，不是官方手机端的分支�
 - 群聊选择性对齐 `v1.9.6` 的公开 `groups.dart`、`LinkState.groups`、七个群聊 RPC 和 `group` 事件；群图片使用独立请求流。按电脑与群隔离订阅，消息按 `seq` 排序去重；打开响应之前的事件排队，旧连接和旧请求结果用代际隔离。重开保留已展开的消息数，回前台沿用原来的连接检查与可靠基线复用规则。
 - 群设置保存核对整份回读，允许空名称由电脑生成及官方规范化；旧端忽略新设置时报告未确认，但保留已确认身份，防止重复创建。不同次成功的新建操作使用不同身份；删除需要用户确认。不改变 Bot 原始会话 Mirror。
 - 消息模型与展示选择性补齐官方 `83c4dc40` 的 `AgentItem.ranBefore`，累计显示此前和本次运行时长。多目录项目由电脑返回带目录前缀的路径，仍使用现有 `files/folder/read` 和文件引用接口，不另造 RPC。
+- 以官方 `112bfa65`（`v2.0.0` 之后）为核对快照，补齐电脑早已发送、手机此前未解码的用户消息字段：`stopped`（`b79433ef`）让被停止的回合也折叠，没有回答时停止原因留在折叠外，折叠行写「处理 X 后停止」；`agent`（`a73fadce`，`fromAgent`）让子智能体经 SendMessage 发来的消息显示成它的卡片，不当成用户气泡，不能编辑，不计入「我发的消息」跳转、模型切换标记和本地排队的收下判断，Bot 聊天里归入工作过程。编辑定位与 `worked`、`usage` 一样忽略回合结束才写回的 `stopped`。
+- 子智能体卡片显示所用模型（`db59ebbc`），按电脑的规则命名：先在电脑发来的模型菜单里找 `@上游/模型id`，用菜单里的名字（如「GPT-6.1-sol」），只有一个上游有该模型时记下上游名；找不到时 Claude 模型写成「Haiku 5.5」，其余原样显示。电脑悬停才看到的上游和完整 id，手机写在子智能体详情页的模型一栏里。
 
 ## 主线新增手机能力
 
@@ -42,7 +45,7 @@ YCode 是独立的非官方 Android 客户端，不是官方手机端的分支�
 
 - `lib/chat/`：`chat_models.dart`、`chat_output.dart`、`step_folds.dart`
 - `lib/chat/markdown/`：`code_citation.dart`、`file_link.dart`、`finite_selection_edges.dart`、`hover_builder.dart`、`hover_scrollbar.dart`、`inline_code.dart`、`lazy_segment.dart`、`markdown_cjk.dart`、`markdown_math.dart`、`markdown_tags.dart`、`markdown_view.dart`、`mermaid_code_block.dart`、`safe_selection_indexes.dart`、`will_change_paint.dart`
-- `lib/chat/widgets/`：`activity_row.dart`、`agent_step.dart`、`assistant_text.dart`、`chat_item_view.dart`、`command_step.dart`、`edge_fade_mask.dart`、`edit_step.dart`、`fade_curve.dart`、`flip_switcher.dart`、`fold_line.dart`、`live_selectable_text.dart`、`notice_row.dart`、`pixel_loader.dart`、`plan_card.dart`、`rolling_text.dart`、`shell_highlight.dart`、`shimmer_text.dart`、`step_clock.dart`、`step_header.dart`、`step_images.dart`、`strings.dart`、`terminal_text.dart`、`thinking_section.dart`、`thinking_spark.dart`、`tool_call_row.dart`、`turn_footer.dart`
+- `lib/chat/widgets/`：`activity_row.dart`、`agent_message_card.dart`、`agent_step.dart`、`assistant_text.dart`、`chat_item_view.dart`、`command_step.dart`、`edge_fade_mask.dart`、`edit_step.dart`、`fade_curve.dart`、`flip_switcher.dart`、`fold_line.dart`、`live_selectable_text.dart`、`notice_row.dart`、`pixel_loader.dart`、`plan_card.dart`、`rolling_text.dart`、`shell_highlight.dart`、`shimmer_text.dart`、`step_clock.dart`、`step_header.dart`、`step_images.dart`、`strings.dart`、`terminal_text.dart`、`thinking_section.dart`、`thinking_spark.dart`、`tool_call_row.dart`、`turn_footer.dart`
 - 其他：`lib/link/chat_codec.dart`、`lib/theme/material_file_icons.dart`、`lib/ui/tasks/chat_page.dart`、`lib/ui/widgets/model_icon.dart`
 
 图标等素材的来源见 [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md)。

@@ -11,6 +11,7 @@ import 'package:baocode_mobile/ui/focus/focus_shell.dart';
 import 'package:baocode_mobile/ui/home_shell.dart';
 import 'package:baocode_mobile/ui/tasks/chat_page.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show RenderParagraph;
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -23,6 +24,15 @@ class _State extends AppState {
   }
   final calls = <(String, Map<String, Object?>)>[];
   final removed = <String>{};
+
+  /// 对话 3 的更新日期；调大它就是那段对话刚做完。
+  int session3Day = 9;
+
+  /// 置顶的对话。
+  final pinnedIds = <String>{};
+
+  /// 改过标题的对话；没改的叫「对话 + 编号」。
+  final titles = <String, String>{};
 
   void remove(String id) {
     removed.add(id);
@@ -56,9 +66,10 @@ class _State extends AppState {
     SessionSummary(
       id: id,
       project: project,
-      title: '对话$id',
+      title: titles[id] ?? '对话$id',
       updatedAt: DateTime(2026, 11, day),
       status: status,
+      pinned: pinnedIds.contains(id),
     ),
   );
 
@@ -67,7 +78,7 @@ class _State extends AppState {
     for (final ref in [
       _s('甲', '1', 'p', 10),
       _s('甲', '2', 'p', 8, LinkSessionStatus.needsInput),
-      _s('甲', '3', 'q', 9),
+      _s('甲', '3', 'q', session3Day),
       _s('乙', '4', 'r', 5),
     ])
       if (!removed.contains(ref.session.id)) ref,
@@ -288,6 +299,69 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
   });
 
+  testWidgets('置顶的对话自成一组在项目上面，标出项目，不再列在项目里，能折叠', (tester) async {
+    final state = _State()..pinnedIds.add('3');
+    addTearDown(state.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: AnimatedBuilder(
+          animation: state,
+          builder: (_, _) => HomeShell(state: state),
+        ),
+      ),
+    );
+    await tester.pump();
+    await _openPanel(tester);
+    final pinnedGroup = find.byKey(const ValueKey('side-group-pinned'));
+    final line = find.byKey(const ValueKey('side-session-甲-3'));
+    expect(line, findsOneWidget, reason: '同一段对话只出现一次');
+    expect(find.descendant(of: pinnedGroup, matching: line), findsOneWidget);
+    expect(
+      find.descendant(
+        of: pinnedGroup,
+        matching: find.textContaining('项目二', findRichText: true),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      tester.getTopLeft(find.byKey(const ValueKey('side-pinned-header'))).dy,
+      lessThan(
+        tester.getTopLeft(find.byKey(const ValueKey('side-project-甲-p'))).dy,
+      ),
+    );
+    await tester.tap(find.byKey(const ValueKey('side-pinned-header')));
+    await tester.pumpAndSettle();
+    expect(line, findsNothing);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  testWidgets('置顶对话标题太长时先截标题，项目名完整显示', (tester) async {
+    final state = _State()
+      ..pinnedIds.add('3')
+      ..titles['3'] = '获取最新代码并整理这次改动的说明' * 3;
+    addTearDown(state.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: AnimatedBuilder(
+          animation: state,
+          builder: (_, _) => HomeShell(state: state),
+        ),
+      ),
+    );
+    await tester.pump();
+    await _openPanel(tester);
+    final line = find.byKey(const ValueKey('side-session-甲-3'));
+    RenderParagraph paragraph(Finder text) => tester.renderObject(
+      find.descendant(of: line, matching: text),
+    );
+    expect(paragraph(find.text('项目二')).didExceedMaxLines, isFalse);
+    expect(
+      paragraph(find.text(state.titles['3']!)).didExceedMaxLines,
+      isTrue,
+    );
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
   testWidgets('点项目标题折叠它的对话，再点展开', (tester) async {
     await _pump(tester);
     await _openPanel(tester);
@@ -375,6 +449,17 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
   });
 
+  testWidgets('打开时自动显示的对话固定住，别的对话做完也不跳过去', (tester) async {
+    final state = await _pump(tester);
+    expect(_page(tester).sessionId, '1');
+    state
+      ..session3Day = 12
+      ..notifyListeners();
+    await tester.pumpAndSettle();
+    expect(_page(tester).sessionId, '1');
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
   testWidgets('侧边栏里长按对话没有「放到首页」，其余菜单都在', (tester) async {
     await _pump(tester);
     await _openPanel(tester);
@@ -383,6 +468,33 @@ void main() {
     expect(find.text('重命名'), findsOneWidget);
     expect(find.text('归档'), findsOneWidget);
     expect(find.text('放到首页'), findsNothing);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  testWidgets('侧边栏里复制会话 ID，提示在最上层，不被侧边栏盖住', (tester) async {
+    final messenger = tester.binding.defaultBinaryMessenger;
+    messenger.setMockMethodCallHandler(
+      SystemChannels.platform,
+      (_) async => null,
+    );
+    addTearDown(
+      () => messenger.setMockMethodCallHandler(SystemChannels.platform, null),
+    );
+    await _pump(tester);
+    await _openPanel(tester);
+    await tester.longPress(find.byKey(const ValueKey('side-session-甲-2')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('复制会话 ID'));
+    await tester.pump();
+    final hint = find.text('已复制');
+    expect(hint, findsOneWidget);
+    // 在哪个 Scaffold 里都会被侧边栏盖住；最上层的 Overlay 才看得见。
+    expect(
+      find.ancestor(of: hint, matching: find.byType(Scaffold)),
+      findsNothing,
+    );
+    await tester.pump(const Duration(seconds: 4));
+    expect(hint, findsNothing);
     await tester.pumpWidget(const SizedBox.shrink());
   });
 

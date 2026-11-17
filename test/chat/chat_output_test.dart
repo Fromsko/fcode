@@ -23,6 +23,41 @@ CodeDiffItem _edit(String file, {int added = 1, int removed = 0}) =>
     );
 
 void main() {
+  test('运行中的状态行和电脑一样，按上一步挑状态词：刚操作完浏览器就想浏览器', () {
+    LiveStatusItem? liveAfter(ChatItem last) {
+      final rows = foldRows(
+        [
+          const UserMessageItem(text: '看看页面'),
+          last,
+          const LiveStatusItem('Planning next move', whimsical: true),
+        ],
+        live: true,
+        isOpen: (_) => true,
+      );
+      return rows.map((row) => row.shown).whereType<LiveStatusItem>().single;
+    }
+
+    expect(
+      liveAfter(
+        const ToolCallItem(kind: ToolKind.browser, tool: 'browser', target: ''),
+      )?.cue?.topic,
+      MusingTopic.browser,
+    );
+    // 上一步还在跑或是回答文字时，没有可想的，随便挑。
+    expect(
+      liveAfter(
+        const ToolCallItem(
+          kind: ToolKind.browser,
+          tool: 'browser',
+          target: '',
+          status: ToolStatus.running,
+        ),
+      )?.cue,
+      isNull,
+    );
+    expect(liveAfter(const AssistantTextItem('马上好'))?.cue, isNull);
+  });
+
   test('运行中连续三个以上编辑合成一行，展开后逐个显示', () {
     final items = <ChatItem>[
       const UserMessageItem(text: '改一下'),
@@ -159,10 +194,55 @@ void main() {
       live: false,
       isOpen: (fold) => fold.kind == StepFoldKind.steps,
     );
-    expect(rows.length, 3);
+    expect(rows.length, 4);
     expect(rows[0].isFold, isTrue, reason: 'the fold line still leads');
-    expect(rows[1].shown, isA<ToolCallItem>());
+    expect(
+      [
+        for (final row in rows.skip(1).take(2))
+          (row.shown as ToolCallItem).target,
+      ],
+      ['a.dart', 'b.dart'],
+      reason: '展开后第一个步骤也有自己的一行',
+    );
     expect(rows[1].isFold, isFalse);
+    expect(rows[1].index, 0);
+  });
+
+  test('已处理和步骤折叠从同一处开始时各占一行，各按各的开合', () {
+    final items = <ChatItem>[
+      const UserMessageItem(text: '看看', worked: Duration(seconds: 30)),
+      _read('a.dart'),
+      _read('b.dart'),
+      _edit('c.dart'),
+      const AssistantTextItem('完了'),
+    ];
+    final open = <(StepFoldKind, int)>{(StepFoldKind.work, 1)};
+    var rows = foldRows(
+      items,
+      live: false,
+      isOpen: (f) => open.contains(f.key),
+    );
+    final lines = rows.where((row) => row.isFold).toList();
+    expect(
+      [for (final row in lines) (row.work?.key, row.steps?.key)],
+      [((StepFoldKind.work, 1), null), (null, (StepFoldKind.steps, 1))],
+    );
+    expect(
+      rows.where((row) => !row.isFold && row.shown is ToolCallItem),
+      isEmpty,
+      reason: '步骤折叠还关着，里面的步骤不单独成行',
+    );
+
+    open.add((StepFoldKind.steps, 1));
+    rows = foldRows(items, live: false, isOpen: (f) => open.contains(f.key));
+    expect(
+      [
+        for (final row in rows)
+          if (!row.isFold && row.shown is ToolCallItem)
+            (row.shown as ToolCallItem).target,
+      ],
+      ['a.dart', 'b.dart'],
+    );
   });
 
   test('a live run shows its under-way step while folded', () {
@@ -298,6 +378,89 @@ void main() {
       expect(result.pending, isNull);
       expect((result.items[0] as PlanItem).status, PlanStatus.approved);
       expect((result.items[1] as PlanItem).status, PlanStatus.expired);
+    });
+  });
+
+  group('停止的回合', () {
+    UserMessageItem prompt({bool stopped = false}) => UserMessageItem(
+      text: '改一下',
+      worked: const Duration(minutes: 1, seconds: 5),
+      stopped: stopped,
+    );
+    StepFolds fold(List<ChatItem> items) =>
+        StepFolds.of(items.length, (i) => items[i], live: false);
+
+    test('没有回答也整段折叠，停止原因留在折叠外', () {
+      final folds = fold([
+        prompt(stopped: true),
+        _read('a.dart'),
+        _edit('b.dart'),
+        const NoticeItem(NoticeKind.error, '已中断'),
+      ]);
+      final work = folds.workAt(1)!;
+      expect((work.start, work.end, work.stopped), (1, 3, true));
+      expect(folds.workAt(3), isNull);
+    });
+
+    test('有回答时照常折叠到回答前，并带上停止标记', () {
+      final folds = fold([
+        prompt(stopped: true),
+        _read('a.dart'),
+        _edit('b.dart'),
+        const AssistantTextItem('先改到这里'),
+      ]);
+      final work = folds.workAt(1)!;
+      expect((work.start, work.end, work.stopped), (1, 3, true));
+    });
+
+    test('没有停止也没有回答的回合保持展开', () {
+      final folds = fold([prompt(), _read('a.dart'), _edit('b.dart')]);
+      expect(folds.workAt(1), isNull);
+    });
+
+    test('Bot 聊天的处理行也带上停止标记', () {
+      final rows = botRows([
+        {'t': 'user', 'text': '查一下', 'worked': 65000, 'stopped': true},
+        {
+          't': 'tool',
+          'kind': 'read',
+          'target': 'a.dart',
+          'status': 'succeeded',
+        },
+        {'t': 'text', 'text': '先查到这里'},
+      ]);
+      expect(rows.singleWhere((row) => row.isFold).work!.stopped, isTrue);
+    });
+
+    testWidgets('折叠行写明处理多久后停止', (tester) async {
+      const worked = Duration(minutes: 1, seconds: 5);
+      const none = (count: 0, added: 0, removed: 0);
+      expect(
+        WorkFoldLine.text(
+          worked,
+          none,
+          stopped: true,
+          strings: FoldStrings(true),
+        ),
+        '处理 1分5秒 后停止',
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: WorkFoldLine(
+              worked: worked,
+              edits: none,
+              expanded: false,
+              onToggle: () {},
+              stopped: true,
+              strings: FoldStrings(false),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      expect(find.textContaining('Stopped after 1m 5s'), findsOneWidget);
+      expect(find.textContaining('Worked for'), findsNothing);
     });
   });
 }

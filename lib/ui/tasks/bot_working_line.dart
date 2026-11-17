@@ -19,12 +19,16 @@ class BotWorkFold extends StatelessWidget {
     super.key,
     required this.worked,
     required this.tr,
+    this.stopped = false,
     this.at,
     this.onOpen,
   });
 
   final Duration worked;
   final String Function(String zh, String en) tr;
+
+  /// 这一轮被用户停止：写成“已停止”。
+  final bool stopped;
 
   /// 这一轮开始的时刻，写在最前面；没有消息带时间时才给。
   final DateTime? at;
@@ -48,7 +52,8 @@ class BotWorkFold extends StatelessWidget {
             children: [
               Text(
                 '${time == null ? '' : '${formatClock(time)} '}'
-                '${tr('已处理', 'Worked')} · ${_duration(worked, tr)}',
+                '${stopped ? tr('已停止', 'Stopped') : tr('已处理', 'Worked')} · '
+                '${_duration(worked, tr)}',
                 style: style,
               ),
               if (onOpen != null)

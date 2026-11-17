@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.2.2
+
+Subagent message cards need a recent desktop version; older desktops show messages as before.
+
+- New: messages a subagent sends to the main agent show as that subagent's own card, with its model, instead of as your messages.
+- New: long-press a conversation to copy its session ID; the menu follows the desktop's order.
+- New: the project long-press menu now offers New conversation, Browse files, Pin, Copy path, Archive all and Remove from list.
+- Improved: pinned conversations stay on top in both layouts, and the pinned group in the immersive sidebar can fold. "Show on home" is gone.
+- Improved: in the sidebar's pinned group, long titles are cut first so the project name stays whole.
+- Improved: a stopped turn folds too, reading "Stopped after X".
+- Improved: screenshots in steps show as thumbnails, as on the desktop; Mermaid diagrams open full screen in the shared image viewer.
+- Improved: the status line while a turn runs picks its words from the last step, as on the desktop.
+- Improved: all hints show on top, visible with the sidebar open and above the keyboard.
+- Improved: text can't be selected while a file preview is zoomed; it can again at normal size.
+- Improved: saving an avatar or a Bot's profile no longer slows conversations open at the same time.
+- Fixed: the immersive layout sometimes jumped to another conversation.
+- Fixed: HTML, source and diff views scrolled up on their own after zooming out.
+- Fixed: scrolling after selecting text turned the whole page grey.
+- Fixed: opening "Worked for" and then a run of steps hid the first step.
+- Fixed: a queued message sometimes showed the wrong state.
+- Fixed: saving a file mangled its extension, e.g. `.jpg` became `.jpg.bin`.
+- Fixed: a pinned conversation's unread dot was counted again on its project.
+
 ## 0.2.1
 
 - New: Bot group chats. Create groups, manage members, @ mention, quote and send pictures.

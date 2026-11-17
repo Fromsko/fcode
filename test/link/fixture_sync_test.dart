@@ -38,6 +38,22 @@ void main() {
   late PhoneLink phone;
   late String desktop;
 
+  /// saveBot 走独立流：回复可能先于控制流上的新状态到达，等状态跟上再核对。
+  Future<void> stateShows(bool Function() ready) async {
+    if (ready()) return;
+    final shown = Completer<void>();
+    void check() {
+      if (ready() && !shown.isCompleted) shown.complete();
+    }
+
+    state.addListener(check);
+    try {
+      await shown.future.timeout(const Duration(seconds: 2));
+    } finally {
+      state.removeListener(check);
+    }
+  }
+
   setUp(() async {
     final network = MemoryLinkNetwork();
     final identity = LinkIdentity.generate();
@@ -160,7 +176,7 @@ void main() {
         'abilities': ['agents'],
       }) as Map;
       final bot = (created['bot'] as Map)['id'] as String;
-      expect(state.bots.any((ref) => ref.bot.id == bot), isTrue);
+      await stateShows(() => state.bots.any((ref) => ref.bot.id == bot));
       final sent = await state.sendMessage(desktop, bot: bot, text: 'bot-live');
       expect(sent, bot);
       final snapshot = await state.request(desktop, LinkMethods.open, {
@@ -174,6 +190,11 @@ void main() {
         'bot': bot,
         'name': 'Renamed test bot',
       });
+      await stateShows(
+        () => state.bots.any(
+          (ref) => ref.bot.id == bot && ref.bot.name == 'Renamed test bot',
+        ),
+      );
       expect(
         state.bots.firstWhere((ref) => ref.bot.id == bot).bot.name,
         'Renamed test bot',

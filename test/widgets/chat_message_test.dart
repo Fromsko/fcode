@@ -1301,4 +1301,36 @@ void main() {
       'option': 'low',
     });
   });
+
+  testWidgets('先点开已处理、再点开步骤，第一个步骤也显示出来', (tester) async {
+    final state = ChineseChatPageState();
+    addTearDown(state.dispose);
+    Map<String, Object?> read(String target) => {
+      't': 'tool',
+      'kind': 'read',
+      'target': target,
+      'status': 'succeeded',
+    };
+    state.history.items.addAll([
+      {'t': 'user', 'text': '看看', 'worked': 30000},
+      read('a.dart'),
+      read('b.dart'),
+      {'t': 'text', 'text': '看完了'},
+    ]);
+    state.history.revision++;
+    await tester.pumpWidget(chatHost(state));
+    await tester.pumpAndSettle();
+    Finder step(String target) =>
+        find.textContaining(target, findRichText: true);
+    expect(step('a.dart'), findsNothing);
+
+    await tester.tap(find.textContaining('已处理', findRichText: true).first);
+    await tester.pumpAndSettle();
+    expect(step('a.dart'), findsNothing, reason: '步骤折叠还关着');
+    await tester.tap(find.textContaining('读取 2 次', findRichText: true).first);
+    await tester.pumpAndSettle();
+    expect(step('a.dart'), findsOneWidget);
+    expect(step('b.dart'), findsOneWidget);
+    expect(find.textContaining('已处理', findRichText: true), findsWidgets);
+  });
 }

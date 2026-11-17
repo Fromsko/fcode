@@ -73,4 +73,30 @@ void main() {
       expect((ChatCodec.encode(item)['usage'] as Map)['speed'], speed);
     }
   });
+
+  test('用户消息的停止标记和子代理来源按电脑格式往返，复制更新不丢', () {
+    final stopped = ChatCodec.decode({
+      't': 'user',
+      'text': '改一下',
+      'worked': 65000,
+      'stopped': true,
+    }) as UserMessageItem;
+    expect(stopped.stopped, isTrue);
+    expect(stopped.worked, const Duration(seconds: 65));
+    expect(stopped.fromAgent, isNull);
+    expect(stopped.copyWith(usage: const TurnUsage()).stopped, isTrue);
+    expect(ChatCodec.encode(stopped)['stopped'], isTrue);
+
+    final relayed = ChatCodec.decode({
+      't': 'user',
+      'text': '查完了',
+      'agent': '检查依赖',
+    }) as UserMessageItem;
+    expect(relayed.fromAgent, '检查依赖');
+    expect(relayed.stopped, isFalse);
+    expect(relayed.copyWith(worked: Duration.zero).fromAgent, '检查依赖');
+    final wire = ChatCodec.encode(relayed);
+    expect(wire['agent'], '检查依赖');
+    expect(wire.containsKey('stopped'), isFalse);
+  });
 }

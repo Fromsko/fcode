@@ -35,11 +35,6 @@ class AppSettings {
   /// conversation: the phone's own, sent as the desktop's Keep.
   bool autoKeep = false;
 
-  /// The conversations shown on the home list beside the projects, as
-  /// (desktop, session): the phone's own choice, the desktop knows nothing
-  /// of it.
-  Set<(String, String)> homeSessions = {};
-
   /// The bots pinned on the lists, as (desktop, bot): the phone's own choice,
   /// the desktop keeps no pin for a bot.
   Set<(String, String)> pinnedBots = {};
@@ -96,11 +91,6 @@ class AppSettings {
     settings.keepBackgroundConnection = json['keepBackgroundConnection'] != false;
     settings.haptics = json['haptics'] != false;
     settings.autoKeep = json['autoKeepChanges'] == true;
-    settings.homeSessions = {
-      for (final entry in (json['homeSessions'] as List?) ?? const [])
-        if (entry case [final String desktop, final String session])
-          (desktop, session),
-    };
     settings.pinnedBots = {
       for (final entry in (json['pinnedBots'] as List?) ?? const [])
         if (entry case [final String desktop, final String bot]) (desktop, bot),
@@ -140,9 +130,6 @@ class AppSettings {
     'keepBackgroundConnection': keepBackgroundConnection,
     'haptics': haptics,
     'autoKeepChanges': autoKeep,
-    'homeSessions': [
-      for (final (desktop, session) in homeSessions) [desktop, session],
-    ],
     'pinnedBots': [
       for (final (desktop, bot) in pinnedBots) [desktop, bot],
     ],

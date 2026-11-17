@@ -19,6 +19,7 @@ import '../widgets/lucide_icon.dart';
 import '../widgets/mobile_widgets.dart';
 import '../widgets/press_menu.dart';
 import '../widgets/pull_refresh.dart';
+import '../widgets/top_hint.dart';
 import '../../theme/app_theme.dart';
 import '../user_message.dart';
 import '../widgets/fold_row.dart';

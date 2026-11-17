@@ -147,4 +147,47 @@ void main() {
     expect(_layoutWidth(tester), closeTo(_page.width * 2, .01));
     expect(tester.takeException(), isNull);
   });
+
+  for (final (name, view) in [
+    ('源码', FileSourceView(text: before, path: 'a.html')),
+    ('差异', DiffView(before: before, after: after, tr: _zh)),
+  ]) {
+    testWidgets('$name页缩小后单击一下，内容不会自己滚走', (tester) async {
+      await _pump(tester, view);
+      final scroll = _vertical(tester);
+      scroll.jumpTo(3000);
+      await tester.pump();
+      await _pinch(tester, 100, 50);
+      final offset = scroll.offset;
+
+      await tester.tapAt(const Offset(200, 300));
+      for (var i = 0; i < 20; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+
+      expect(scroll.offset, offset);
+      expect(tester.takeException(), isNull);
+    });
+  }
+
+  testWidgets('缩放时长按不选字，捏回原大后可以选字；捏的时候收起已有的选字工具条', (tester) async {
+    await _pump(tester, FileSourceView(text: before, path: 'a.txt'));
+    await tester.longPressAt(const Offset(60, 200));
+    await tester.pumpAndSettle();
+    expect(find.text('Copy'), findsOneWidget);
+
+    await _pinch(tester, 100, 50);
+    await tester.pumpAndSettle();
+    expect(find.text('Copy'), findsNothing);
+    await tester.longPressAt(const Offset(60, 200));
+    await tester.pumpAndSettle();
+    expect(find.text('Copy'), findsNothing);
+
+    await _pinch(tester, 50, 100);
+    expect(_layoutWidth(tester), _page.width);
+    await tester.longPressAt(const Offset(60, 200));
+    await tester.pumpAndSettle();
+    expect(find.text('Copy'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 }

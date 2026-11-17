@@ -165,7 +165,8 @@ bool shownInBotChat(ChatItem? item) => switch (item) {
         ChatCodec.botParts(text).any((part) => part.$1 == ChatCodec.botCardTag),
   ToolCallItem(tool: ChatCodec.botSendTool) =>
     ChatCodec.botSentToUser(item) != null,
-  final UserMessageItem user => ChatCodec.botEvent(user) == null,
+  final UserMessageItem user =>
+    user.fromAgent == null && ChatCodec.botEvent(user) == null,
   ToolCallItem(:final input) when input['sticker'] is String => true,
   final ToolCallItem tool when ChatCodec.botImageUrl(tool) != null => true,
   final ChatItem item => standsOutOfWork(item),
@@ -199,7 +200,13 @@ List<ChatRow> botRows(List<Object?> items, {bool startsAtBeginning = true}) {
     }
     if (answer == prompt) continue;
     lines[answer] = (
-      StepFold(StepFoldKind.work, prompt + 1, end, worked: message.worked),
+      StepFold(
+        StepFoldKind.work,
+        prompt + 1,
+        end,
+        worked: message.worked,
+        stopped: message.stopped,
+      ),
       message,
     );
   }
@@ -386,21 +393,23 @@ List<ChatRow> foldRows(
         since: startedAt,
       );
     }
-    // A fold's line leads its run; the run's items follow as their own
-    // rows while it stands open, and hide while closed (a run under way
-    // shows its last step even closed).
-    if (row.work ?? row.steps case final fold?) {
+    // Each fold's line leads its run as a row of its own (a turn's work and
+    // a run of steps may start at one item); the run's items follow as
+    // their own rows while it stands open, the first among them, and hide
+    // while closed (a run under way shows its last step even closed).
+    for (final fold in [?row.work, ?row.steps]) {
       rows.add(
         ChatRow.fold(
           i,
           items[i],
           folds.shownAt(i, item),
-          steps: row.steps,
-          work: row.work,
+          steps: fold.kind == StepFoldKind.steps ? fold : null,
+          work: fold.kind == StepFoldKind.work ? fold : null,
           foldItems: [for (var j = fold.start; j < fold.end; j++) ?decoded[j]],
         ),
       );
-    } else if (row.item || footer != null) {
+    }
+    if (row.item || footer != null) {
       rows.add(
         ChatRow.single(
           i,

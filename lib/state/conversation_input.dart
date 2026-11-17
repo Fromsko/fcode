@@ -198,16 +198,17 @@ class MessageEditAnchor {
     );
   }
 
-  // 耗时和用量在回合结束时才写回用户消息，不算消息变化。
+  // 耗时、用量和停止标记在回合结束时才写回用户消息，不算消息变化。
   static String _stable(Object? item) => jsonEncode(
     item is Map
         ? {
             for (final entry in item.entries)
-              if (entry.key != 'worked' && entry.key != 'usage')
-                entry.key: entry.value,
+              if (!_turnEnd.contains(entry.key)) entry.key: entry.value,
           }
         : item,
   );
+
+  static const _turnEnd = {'worked', 'usage', 'stopped'};
 
   static String _userHistory(SessionBuffer buffer, int index) => jsonEncode([
     for (var i = 0; i < index; i++)

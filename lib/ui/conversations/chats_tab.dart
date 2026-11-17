@@ -25,6 +25,7 @@ import '../widgets/mobile_widgets.dart';
 import '../widgets/model_icon.dart';
 import '../widgets/project_icon_view.dart';
 import '../widgets/pull_refresh.dart';
+import '../widgets/top_hint.dart';
 import '../widgets/formats.dart';
 
 /// A new conversation, as the desktop's own starts one: in the project
@@ -38,14 +39,11 @@ Future<void> newConversation(
 }) async {
   project ??= recentProject(state, desktopId ?? state.selectedDesktopId);
   if (project == null) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          state.tr(
-            '先在电脑中打开项目并连接。',
-            'Connect a desktop with an open project first.',
-          ),
-        ),
+    showTopHint(
+      context,
+      state.tr(
+        '先在电脑中打开项目并连接。',
+        'Connect a desktop with an open project first.',
       ),
     );
     return;
@@ -291,31 +289,20 @@ class _ChatsTabState extends State<ChatsTab> {
   Widget build(BuildContext context) {
     final state = widget.state;
     final desktopId = state.selectedDesktopId;
-    final projects = _filters.projects(
-      state.projects.where((ref) => ref.desktopId == desktopId),
+    final desktopProjects = state.projects.where(
+      (ref) => ref.desktopId == desktopId,
+    );
+    // 和电脑侧边栏一样：置顶的对话在最上面，不再算在各自的项目里。
+    final pinned = _filters.pinned(
+      desktopProjects,
       state.sessions,
       state.desktopName,
     );
-    // Conversations put on the home list stand beside the projects; being
-    // pinned only lifts one within its project (and, on the home list, to
-    // the top).
-    final home = state.sessions.where((ref) {
-      if (ref.desktopId != desktopId || !state.onHome(ref)) return false;
-      final project = state.projects
-          .where(
-            (p) =>
-                p.desktopId == ref.desktopId &&
-                p.project.id == ref.session.project,
-          )
-          .firstOrNull;
-      return _filters
-          .sessions(
-            [ref],
-            state.desktopName,
-            projectName: project?.project.name ?? '',
-          )
-          .isNotEmpty;
-    }).toList();
+    final projects = _filters.projects(
+      desktopProjects,
+      state.sessions,
+      state.desktopName,
+    );
     return Scaffold(
       appBar: AppBar(
         centerTitle: true,
@@ -399,8 +386,10 @@ class _ChatsTabState extends State<ChatsTab> {
                     onRefresh: () => _refresh(state, desktopId),
                     child: ListView(
                       children: [
-                        ..._merged(projects, home),
-                        if (projects.isEmpty && home.isEmpty)
+                        for (final ref in pinned)
+                          projectSessionRow(context, state, ref, onTop: true),
+                        for (final item in projects) _projectRow(state, item),
+                        if (projects.isEmpty && pinned.isEmpty)
                           _emptyNote(state, desktopId),
                       ],
                     ),
@@ -411,42 +400,6 @@ class _ChatsTabState extends State<ChatsTab> {
     );
   }
 
-  /// A conversation put on the home list: its project under its title.
-  Widget _homeSessionRow(AppState state, SessionRef ref) => SessionPressRow(
-    key: ValueKey('home-${ref.desktopId}-${ref.session.id}'),
-    state: state,
-    session: ref,
-    child: ListRow(
-      leading: waitingAvatar(state, LetterAvatar(ref.session.title), [ref]),
-      title: ref.session.title,
-      aside: modelTag(context, state, ref),
-      subtitle:
-          state.projects
-              .where(
-                (project) =>
-                    project.desktopId == ref.desktopId &&
-                    project.project.id == ref.session.project,
-              )
-              .firstOrNull
-              ?.project
-              .name ??
-          ref.session.project,
-      time: _time(ref.session.updatedAt),
-      flags: statusFlags(context, state, [ref], counted: false),
-      status: ref.session.pinned ? const LucideIcon('pin', size: 16) : null,
-      onTap: () => openPage<void>(
-        context,
-        ChatPage(
-          state: state,
-          desktopId: ref.desktopId,
-          sessionId: ref.session.id,
-          title: ref.session.title,
-          projectId: ref.session.project,
-        ),
-      ),
-    ),
-  );
-
   Widget _projectRow(AppState state, ConversationProject item) {
     final ref = item.ref;
     final sessions = item.sessions;
@@ -456,8 +409,6 @@ class _ChatsTabState extends State<ChatsTab> {
             (a, b) => a.session.updatedAt.isAfter(b.session.updatedAt) ? a : b,
           );
     final latest = newest(sessions);
-    // 已放到首页的对话在首页自己那行提醒，这里不再算一遍。
-    final counted = notOnHome(state, sessions);
     final focus =
         newest(
           sessions.where(
@@ -475,11 +426,11 @@ class _ChatsTabState extends State<ChatsTab> {
       leading: waitingAvatar(
         state,
         ProjectIconView(state: state, ref: ref),
-        counted,
+        sessions,
       ),
       title:
           '${ref.project.name}${sessions.isEmpty ? '' : '（${sessions.length}）'}',
-      flags: statusFlags(context, state, counted),
+      flags: statusFlags(context, state, sessions),
       subtitle: [
         if (projectSource(ref.project.id) == ConversationSource.unknown)
           state.tr('未知来源', 'Unknown location'),
@@ -597,39 +548,6 @@ class _ChatsTabState extends State<ChatsTab> {
   static const _unfoldDuration = Duration(milliseconds: 200);
   static const _unfoldCurve = Curves.easeOutCubic;
   static const _unfoldIndent = 28.0;
-
-  /// Projects and the conversations put on the home list by their latest
-  /// activity, as a chat app orders its chats: pinned conversations first,
-  /// then pinned projects, those with no activity last in their own order.
-  List<Widget> _merged(
-    List<ConversationProject> projects,
-    List<SessionRef> home,
-  ) {
-    final state = widget.state;
-    final rows = <(int, DateTime?, Widget)>[
-      for (final ref in home)
-        (
-          ref.session.pinned ? 0 : 2,
-          ref.session.updatedAt,
-          _homeSessionRow(state, ref),
-        ),
-      for (final item in projects)
-        (
-          item.ref.project.pinned == true ? 1 : 2,
-          item.activity,
-          _projectRow(state, item),
-        ),
-    ];
-    final order = {for (final (i, row) in rows.indexed) row.$3: i};
-    rows.sort((a, b) {
-      if (a.$1 != b.$1) return a.$1.compareTo(b.$1);
-      final (at, bt) = (a.$2, b.$2);
-      if (at != null && bt != null && at != bt) return bt.compareTo(at);
-      if ((at == null) != (bt == null)) return at == null ? 1 : -1;
-      return order[a.$3]!.compareTo(order[b.$3]!);
-    });
-    return [for (final row in rows) row.$3];
-  }
 
   /// Why the list is empty: still connecting, offline, a search, or no
   /// project open on that desktop.
@@ -792,29 +710,28 @@ class ProjectChatsPage extends StatelessWidget {
 }
 
 /// A conversation in a project's list: in the project's page and under a
-/// project unfolded on the home list.
-Widget projectSessionRow(BuildContext context, AppState state, SessionRef ref) {
-  // 放到首页的：提醒在首页那行，这里只灰着标出来。
-  final home = state.onHome(ref);
-  final flags = statusFlags(context, state, [ref], counted: false);
+/// project unfolded on the home list. [onTop], a pinned one above the
+/// projects: its project named before its last line.
+Widget projectSessionRow(
+  BuildContext context,
+  AppState state,
+  SessionRef ref, {
+  bool onTop = false,
+}) {
   return SessionPressRow(
-    key: ValueKey('session-${ref.desktopId}-${ref.session.id}'),
+    key: ValueKey(
+      '${onTop ? 'pinned' : 'session'}-${ref.desktopId}-${ref.session.id}',
+    ),
     state: state,
     session: ref,
     child: ListRow(
-      leading: home
-          ? homeWaitingDot(context, state, ref, LetterAvatar(ref.session.title))
-          : waitingAvatar(state, LetterAvatar(ref.session.title), [ref]),
+      leading: waitingAvatar(state, LetterAvatar(ref.session.title), [ref]),
       title: ref.session.title,
-      note: home ? state.tr('首页', 'Home') : null,
       aside: modelTag(context, state, ref),
-      flags: home
-          ? [
-              for (final (label, _) in flags)
-                (label, Theme.of(context).hintColor),
-            ]
-          : flags,
-      subtitle: lastLine(state, ref),
+      flags: statusFlags(context, state, [ref], counted: false),
+      subtitle: onTop
+          ? [projectNameOf(state, ref), ?lastLine(state, ref)].join(' · ')
+          : lastLine(state, ref),
       time: sessionTime(state, ref.session.updatedAt),
       status: ref.session.pinned ? const LucideIcon('pin', size: 16) : null,
       onTap: () => openPage<void>(
@@ -849,31 +766,18 @@ Widget waitingAvatar(
   );
 }
 
-/// [avatar] with a grey dot when [ref] waits on the user: the red count is
-/// on the conversation's own row on the home list, this only points there.
-/// In a project's list the row carries the 首页 tag, so a red count here
-/// would read as work to do in the project, and two counts would disagree.
-Widget homeWaitingDot(
-  BuildContext context,
-  AppState state,
-  SessionRef ref,
-  Widget avatar,
-) {
-  final counts = state.countByStatus([ref]);
-  final waiting = counts.needsInput + counts.done;
-  return Badge(
-    key: ValueKey('home-waiting-dot-${ref.desktopId}-${ref.session.id}'),
-    isLabelVisible: waiting > 0,
-    smallSize: 7,
-    backgroundColor: Theme.of(context).hintColor,
-    child: avatar,
-  );
-}
-
-/// The conversations [project] stands for on the home list: those put on
-/// the home list have rows of their own, and are counted there instead.
-Iterable<SessionRef> notOnHome(AppState state, Iterable<SessionRef> project) =>
-    project.where((ref) => !state.onHome(ref));
+/// The name of [ref]'s project, its id until the project list knows it.
+String projectNameOf(AppState state, SessionRef ref) =>
+    state.projects
+        .where(
+          (p) =>
+              p.desktopId == ref.desktopId &&
+              p.project.id == ref.session.project,
+        )
+        .firstOrNull
+        ?.project
+        .name ??
+    ref.session.project;
 
 String sessionTime(AppState state, DateTime date, [DateTime? now]) {
   now ??= DateTime.now();

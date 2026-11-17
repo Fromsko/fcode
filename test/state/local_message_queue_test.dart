@@ -295,4 +295,32 @@ void main() {
     await h.settle();
     expect(h.sent, isEmpty);
   });
+
+  test('子代理发来的消息不算我的消息被收下，立即发送的那条仍在等待', () async {
+    final h = Harness()..buffer.live = true;
+    final first = h.add('甲');
+    expect(await h.queue.sendNow('d', 's', first.id), isTrue);
+    expect(h.queue.inserting('d', 's').map((e) => e.text), ['甲']);
+    LinkSessionUpdate update(List<Object?> items) => LinkSessionUpdate(
+      session: 's',
+      start: 0,
+      count: items.length,
+      items: items,
+      live: true,
+    );
+    const relayed = {'t': 'user', 'text': '查完了', 'agent': '检查依赖'};
+    h.buffer.apply(update([relayed]), snapshot: true);
+    h.queue.drain('d', 's');
+    expect(h.queue.inserting('d', 's').map((e) => e.text), ['甲']);
+    h.buffer.apply(
+      update([
+        relayed,
+        {'t': 'user', 'text': '甲'},
+      ]),
+      snapshot: true,
+    );
+    h.queue.drain('d', 's');
+    expect(h.queue.inserting('d', 's'), isEmpty);
+    await h.pastGrace();
+  });
 }

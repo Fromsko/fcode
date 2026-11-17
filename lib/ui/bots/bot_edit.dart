@@ -199,9 +199,7 @@ class _BotEditPageState extends State<BotEditPage> {
   Future<void> _save() async {
     if (_saving) return;
     if (_name.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(widget.state.tr('请填写名字', 'Enter a name'))),
-      );
+      showTopHint(context, widget.state.tr('请填写名字', 'Enter a name'));
       return;
     }
     if (_desktop == null || !widget.state.isOnline(_desktop!)) {

@@ -8,6 +8,7 @@ import '../models/user_facing_error.dart';
 import '../state/app_state.dart';
 import '../theme/app_theme.dart';
 import '../ui/files/files_tab.dart';
+import '../ui/widgets/top_hint.dart';
 import '../ui/user_message.dart';
 import 'chat_markdown.dart';
 
@@ -80,8 +81,7 @@ Future<void> showLinkedFile(
     );
   } catch (error) {
     if (context.mounted) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(userMessage(state, error))));
+      showTopHint(context, userMessage(state, error));
     }
   }
 }
@@ -119,10 +119,9 @@ Future<String?> _findInProject(
   if (named.length == 1) return named.single;
   if (!context.mounted) return null;
   if (named.isEmpty) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(state.tr('项目里没有找到 $path。', 'No $path in the project.')),
-      ),
+    showTopHint(
+      context,
+      state.tr('项目里没有找到 $path。', 'No $path in the project.'),
     );
     return null;
   }
@@ -184,8 +183,7 @@ Future<void> confirmExternalLink(
     }
   } catch (error) {
     if (context.mounted) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(userMessage(state, error))));
+      showTopHint(context, userMessage(state, error));
     }
   }
 }

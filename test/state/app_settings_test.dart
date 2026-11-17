@@ -52,9 +52,8 @@ void main() {
     expect(settings.codeFontSize, 10);
   });
 
-  test('放到首页的对话、置顶的 Bot 和群聊按电脑保存并能读回', () {
+  test('置顶的 Bot 和群聊按电脑保存并能读回；旧版放到首页的记录读时丢弃', () {
     final settings = AppSettings()
-      ..homeSessions.add(('desk', 'session'))
       ..pinnedBots.add(('desk', 'bot'))
       ..pinnedGroups.add(('desk', 'group'));
     final back = AppSettings.fromJson(
@@ -62,12 +61,16 @@ void main() {
         jsonDecode(jsonEncode(settings.toJson())) as Map,
       ),
     );
-    expect(back.homeSessions, {('desk', 'session')});
     expect(back.pinnedBots, {('desk', 'bot')});
     expect(back.pinnedGroups, {('desk', 'group')});
-    expect(AppSettings.fromJson({}).homeSessions, isEmpty);
     expect(AppSettings.fromJson({}).pinnedBots, isEmpty);
     expect(AppSettings.fromJson({}).pinnedGroups, isEmpty);
+    final old = AppSettings.fromJson({
+      'homeSessions': [
+        ['desk', 'session'],
+      ],
+    });
+    expect(old.toJson().containsKey('homeSessions'), isFalse);
   });
 
   test('通知分三类保存；旧的总开关关闭时三类都关', () {

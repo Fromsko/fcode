@@ -6,6 +6,7 @@ import '../../chat/chat_clipboard.dart';
 import '../../chat/chat_models.dart';
 import '../../state/app_state.dart';
 import 'mobile_widgets.dart';
+import 'top_hint.dart';
 
 /// 画廊里的一张图。
 class GalleryImage {
@@ -67,12 +68,10 @@ Future<void> showImageGallery(
   return showDialog<void>(
     context: context,
     builder: (_) => Dialog.fullscreen(
-      child: ScaffoldMessenger(
-        child: ImageGalleryPage(
-          images: selected?.images ?? images,
-          initialIndex: selected?.index ?? initialIndex,
-          saver: saver,
-        ),
+      child: ImageGalleryPage(
+        images: selected?.images ?? images,
+        initialIndex: selected?.index ?? initialIndex,
+        saver: saver,
       ),
     ),
   );
@@ -125,20 +124,15 @@ class _ImageGalleryPageState extends State<ImageGalleryPage> {
     try {
       await ChatClipboard.copyImage(image.bytes, name: image.name);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(AppState.phrase('图片已复制', 'Image copied'))),
-        );
+        showTopHint(context, AppState.phrase('图片已复制', 'Image copied'));
       }
     } catch (_) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              AppState.phrase(
-                '无法复制图片，请重试。',
-                'Could not copy the image. Try again.',
-              ),
-            ),
+        showTopHint(
+          context,
+          AppState.phrase(
+            '无法复制图片，请重试。',
+            'Could not copy the image. Try again.',
           ),
         );
       }
@@ -155,14 +149,11 @@ class _ImageGalleryPageState extends State<ImageGalleryPage> {
       );
     } catch (_) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              AppState.phrase(
-                '无法保存图片，请重试。',
-                'Could not save the image. Try again.',
-              ),
-            ),
+        showTopHint(
+          context,
+          AppState.phrase(
+            '无法保存图片，请重试。',
+            'Could not save the image. Try again.',
           ),
         );
       }

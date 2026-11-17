@@ -18,10 +18,13 @@ import '../ui/widgets/bubble_menu.dart';
 import '../ui/widgets/image_gallery.dart';
 import '../ui/widgets/formats.dart';
 import '../ui/widgets/mobile_widgets.dart';
+import '../ui/widgets/top_hint.dart';
 import 'chat_links.dart';
 import 'chat_markdown.dart';
 import 'widgets/message_pictures.dart';
 import 'stickers.dart';
+import 'widgets/agent_message_card.dart';
+import 'widgets/agent_step.dart' show AgentStrings, ListedModel;
 import 'widgets/chat_item_view.dart';
 import 'widgets/notice_row.dart';
 import '../theme/app_theme.dart';
@@ -110,25 +113,19 @@ class MessageView extends StatelessWidget {
     String text, {
     List<ImageAttachment> images = const [],
   }) async {
-    final String message;
+    var copied = true;
     try {
       await ChatClipboard.copyMessage(text, images);
-      message = state.tr('已复制', 'Copied');
     } catch (_) {
-      if (!context.mounted) return;
-      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-        SnackBar(
-          content: Text(
-            state.tr('复制失败，请重试。', 'Copy failed. Please try again.'),
-          ),
-        ),
-      );
-      return;
+      copied = false;
     }
-    if (context.mounted) {
-      ScaffoldMessenger.maybeOf(context)
-          ?.showSnackBar(SnackBar(content: Text(message)));
-    }
+    if (!context.mounted) return;
+    showTopHint(
+      context,
+      copied
+          ? state.tr('已复制', 'Copied')
+          : state.tr('复制失败，请重试。', 'Copy failed. Please try again.'),
+    );
   }
 
   @override
@@ -257,11 +254,18 @@ class MessageView extends StatelessWidget {
       );
     }
     if (bot != null &&
-        (value is UserMessageItem || value is AssistantTextItem)) {
+        ((value is UserMessageItem && value.fromAgent == null) ||
+            value is AssistantTextItem)) {
       return _botBubble(context, value!);
     }
     final Widget content;
-    if (value is UserMessageItem) {
+    if (value case UserMessageItem(fromAgent: final agent?)) {
+      content = AgentMessageCard(
+        agent: agent,
+        body: _prose(value.text),
+        strings: AgentStrings(state.tr('中', 'en') == '中'),
+      );
+    } else if (value is UserMessageItem) {
       content = _userMessage(context, value);
     } else if (value is AssistantTextItem) {
       // 普通智能体不解释 Bot 标签，也不删除语气或内部标记。
@@ -312,6 +316,7 @@ class MessageView extends StatelessWidget {
                 item: value,
               )
             : null,
+        modelMenu: value is AgentItem ? state.modelMenu(desktopId) : const [],
         onOpenFile: projectId == null && bot == null
             ? null
             : (context, path) => showLinkedFile(
@@ -556,12 +561,14 @@ class _StepRow extends StatefulWidget {
     required this.zh,
     this.onOpen,
     this.onOpenFile,
+    required this.modelMenu,
   });
 
   final ChatItem item;
   final bool zh;
   final VoidCallback? onOpen;
   final Future<void> Function(BuildContext context, String path)? onOpenFile;
+  final List<ListedModel> modelMenu;
 
   @override
   State<_StepRow> createState() => _StepRowState();
@@ -581,6 +588,7 @@ class _StepRowState extends State<_StepRow> {
       expanded: expanded,
       onToggle: () => setState(() => _manual = !expanded),
       onOpen: widget.onOpen,
+      modelMenu: widget.modelMenu,
       onOpenFile: widget.onOpenFile == null
           ? null
           : (path) => widget.onOpenFile!(context, path),

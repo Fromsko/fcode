@@ -297,10 +297,15 @@ class LocalMessageQueue {
     'Not connected. Queued messages are kept and sent once connected.',
   );
 
-  /// The user's messages taken up in [buffer]'s conversation.
+  /// The user's messages taken up in [buffer]'s conversation; a subagent's
+  /// (SendMessage, `agent`) is not one.
   static int _userMessages(SessionBuffer buffer) => buffer.items
       .where(
-        (item) => item is Map && item['t'] == 'user' && item['queued'] != true,
+        (item) =>
+            item is Map &&
+            item['t'] == 'user' &&
+            item['queued'] != true &&
+            item['agent'] == null,
       )
       .length;
 

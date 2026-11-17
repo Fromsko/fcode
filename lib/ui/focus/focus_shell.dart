@@ -21,6 +21,7 @@ import '../widgets/back_to_exit.dart';
 import '../widgets/lucide_icon.dart';
 import '../widgets/mobile_widgets.dart';
 import '../widgets/project_icon_view.dart';
+import '../widgets/top_hint.dart';
 
 /// The conversation on screen: a listed one, or a draft in [draftIn].
 class _Open {
@@ -58,6 +59,9 @@ class _FocusShellState extends State<FocusShell> {
   /// Projects folded in the side panel; all start unfolded.
   final _folded = <(String, String)>{};
 
+  /// The pinned group folded in the side panel; it starts unfolded.
+  bool _pinnedFolded = false;
+
   _Open? _open;
 
   AppState get state => widget.state;
@@ -73,7 +77,9 @@ class _FocusShellState extends State<FocusShell> {
   }
 
   /// Until one is picked: the one open last time if on the chosen desktop,
-  /// else that desktop's latest, as soon as the list knows it.
+  /// else that desktop's latest, as soon as the list knows it. Kept once
+  /// shown (see [build]): another conversation updated later does not take
+  /// its place.
   _Open? _initial() {
     final desktopId = state.selectedDesktopId;
     final listed = state.sessions.where((ref) => ref.desktopId == desktopId);
@@ -109,14 +115,11 @@ class _FocusShellState extends State<FocusShell> {
   ]) async {
     project ??= recentProject(state, state.selectedDesktopId);
     if (project == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            state.tr(
-              '先在电脑中打开项目并连接。',
-              'Connect a desktop with an open project first.',
-            ),
-          ),
+      showTopHint(
+        context,
+        state.tr(
+          '先在电脑中打开项目并连接。',
+          'Connect a desktop with an open project first.',
         ),
       );
       return;
@@ -169,7 +172,7 @@ class _FocusShellState extends State<FocusShell> {
                 !_listed(open))) {
       _open = null;
     }
-    final open = _open ?? _initial();
+    final open = _open ??= _initial();
     final leading = _SidePanelButton(
       state: state,
       onPressed: () => _scaffold.currentState?.openDrawer(),
@@ -198,10 +201,12 @@ class _FocusShellState extends State<FocusShell> {
           searchRow: _searchRow,
           refreshEdge: _refreshEdge,
           folded: _folded,
+          pinnedFolded: _pinnedFolded,
           onSearch: () => setState(() {}),
           onToggle: (key, set) => setState(
             () => set.contains(key) ? set.remove(key) : set.add(key),
           ),
+          onTogglePinned: () => setState(() => _pinnedFolded = !_pinnedFolded),
           onSelect: _select,
           onNew: _newConversation,
         ),
@@ -347,8 +352,10 @@ class _SidePanel extends StatelessWidget {
     required this.searchRow,
     required this.refreshEdge,
     required this.folded,
+    required this.pinnedFolded,
     required this.onSearch,
     required this.onToggle,
+    required this.onTogglePinned,
     required this.onSelect,
     required this.onNew,
   });
@@ -364,8 +371,10 @@ class _SidePanel extends StatelessWidget {
   final GlobalKey searchRow;
   final ValueNotifier<double> refreshEdge;
   final Set<(String, String)> folded;
+  final bool pinnedFolded;
   final VoidCallback onSearch;
   final void Function((String, String) key, Set<(String, String)> set) onToggle;
+  final VoidCallback onTogglePinned;
   final ValueChanged<SessionRef> onSelect;
   final Future<void> Function(BuildContext context, [ProjectRef? project])
   onNew;
@@ -378,8 +387,17 @@ class _SidePanel extends StatelessWidget {
       final scheme = theme.colorScheme;
       final desktopId = state.selectedDesktopId;
       final filters = ConversationFilters(query: search.text);
+      final desktopProjects = state.projects.where(
+        (ref) => ref.desktopId == desktopId,
+      );
+      // 和电脑侧边栏一样：置顶的对话自成一组在最上面，不再列在项目里。
+      final pinned = filters.pinned(
+        desktopProjects,
+        state.sessions,
+        state.desktopName,
+      );
       final projects = filters.projects(
-        state.projects.where((ref) => ref.desktopId == desktopId),
+        desktopProjects,
         state.sessions,
         state.desktopName,
       );
@@ -536,7 +554,7 @@ class _SidePanel extends StatelessWidget {
                             ),
                           ),
                         ),
-                        if (projects.isEmpty)
+                        if (projects.isEmpty && pinned.isEmpty)
                           SliverToBoxAdapter(
                             child: Padding(
                               padding: const EdgeInsets.all(MobileSpace.xl),
@@ -555,13 +573,19 @@ class _SidePanel extends StatelessWidget {
                               ),
                             ),
                           ),
+                        if (pinned.isNotEmpty)
+                          _pinnedGroup(
+                            context,
+                            pinned,
+                            searching: filters.searching,
+                          ),
                         // 每个项目一组：标题吸在顶上，直到下一个项目把它顶走。
                         for (final (index, item) in projects.indexed)
                           _group(
                             context,
                             item,
                             searching: filters.searching,
-                            first: index == 0,
+                            first: index == 0 && pinned.isEmpty,
                           ),
                         const SliverToBoxAdapter(
                           child: SizedBox(height: MobileSpace.md),
@@ -598,10 +622,66 @@ class _SidePanel extends StatelessWidget {
     final key = (ref.desktopId, ref.project.id);
     // 搜索时都摊开，搜到的对话不藏在折叠里。
     final isFolded = !searching && folded.contains(key);
-    final card = Theme.of(context).colorScheme.surfaceContainerLowest;
-    // 和列表模式一样撑满一行；项目之间的线和列表行一样，从名字底下起。
-    return DecoratedSliver(
+    return _section(
+      context,
       key: ValueKey('side-group-${ref.desktopId}-${ref.project.id}'),
+      first: first,
+      folded: isFolded,
+      sessions: item.sessions,
+      header: _ProjectHeader(
+        state: state,
+        project: ref,
+        sessions: item.sessions,
+        folded: isFolded,
+        onToggle: item.sessions.isEmpty ? null : () => onToggle(key, folded),
+        onNew: () => onNew(context, ref),
+      ),
+    );
+  }
+
+  /// 置顶的对话一组，在项目上面；对话不在项目下，后面标出它的项目。
+  Widget _pinnedGroup(
+    BuildContext context,
+    List<SessionRef> sessions, {
+    required bool searching,
+  }) {
+    final isFolded = !searching && pinnedFolded;
+    return _section(
+      context,
+      key: const ValueKey('side-group-pinned'),
+      first: true,
+      folded: isFolded,
+      sessions: sessions,
+      showProject: true,
+      header: _GroupTitle(
+        key: const ValueKey('side-pinned-header'),
+        onTap: onTogglePinned,
+        leading: LucideIcon(
+          'pin',
+          size: 16,
+          color: Theme.of(context).hintColor,
+        ),
+        title: state.tr('置顶', 'Pinned'),
+        folded: isFolded,
+        dot: isFolded ? _statusColor(context, state, sessions) : null,
+      ),
+    );
+  }
+
+  /// 一组：标题吸在顶上，下面是它的对话，折叠时只剩标题。
+  Widget _section(
+    BuildContext context, {
+    required Key key,
+    required Widget header,
+    required List<SessionRef> sessions,
+    required bool folded,
+    required bool first,
+    bool showProject = false,
+  }) {
+    final card = Theme.of(context).colorScheme.surfaceContainerLowest;
+    // 和列表模式一样撑满一行；组之间的线和列表行一样，从名字底下起。
+    return DecoratedSliver(
+      key: key,
       decoration: BoxDecoration(color: card),
       sliver: SliverMainAxisGroup(
         slivers: [
@@ -612,17 +692,8 @@ class _SidePanel extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   if (!first)
-                    const Divider(height: 1, indent: _ProjectHeader.textStart),
-                  _ProjectHeader(
-                    state: state,
-                    project: ref,
-                    sessions: item.sessions,
-                    folded: isFolded,
-                    onToggle: item.sessions.isEmpty
-                        ? null
-                        : () => onToggle(key, folded),
-                    onNew: () => onNew(context, ref),
-                  ),
+                    const Divider(height: 1, indent: _GroupTitle.textStart),
+                  header,
                 ],
               ),
             ),
@@ -636,11 +707,12 @@ class _SidePanel extends StatelessWidget {
             ),
             sliver: SliverList.list(
               children: [
-                if (!isFolded)
-                  for (final session in item.sessions)
+                if (!folded)
+                  for (final session in sessions)
                     _SessionLine(
                       state: state,
                       session: session,
+                      showProject: showProject,
                       selected:
                           open?.desktopId == session.desktopId &&
                           open?.sessionId == session.session.id,
@@ -672,11 +744,6 @@ class _ProjectHeader extends StatelessWidget {
   final VoidCallback? onToggle;
   final VoidCallback onNew;
 
-  static const _iconSize = 22.0, _gap = 10.0;
-
-  /// 名字起头离左边多远：项目之间的分割线从这里起。
-  static const textStart = MobileSpace.md + _iconSize + _gap;
-
   @override
   Widget build(BuildContext context) {
     final hint = Theme.of(context).hintColor;
@@ -686,74 +753,121 @@ class _ProjectHeader extends StatelessWidget {
       key: ValueKey('side-project-${project.desktopId}-${project.project.id}'),
       state: state,
       project: project,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(MobileSizes.radius),
+      // 侧边栏的新对话原地打开，和加号一样。
+      onNew: () async => onNew(),
+      child: _GroupTitle(
         onTap: onToggle ?? onNew,
-        child: SizedBox(
-          height: 46,
-          child: Row(
-            children: [
-              const SizedBox(width: MobileSpace.md),
-              ProjectIconView(
-                state: state,
-                ref: project,
-                size: _iconSize,
-                showBadge: false,
-              ),
-              const SizedBox(width: _gap),
-              // 名字和角标占满中间，右边两个按钮贴着行尾，和对话的时间对齐。
-              Expanded(
-                child: Row(
-                  children: [
-                    Flexible(
-                      child: Text(
-                        project.project.name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: MobileType.body,
-                          fontWeight: FontWeight.w600,
-                        ),
+        leading: ProjectIconView(
+          state: state,
+          ref: project,
+          size: _GroupTitle.iconSize,
+          showBadge: false,
+        ),
+        title: project.project.name,
+        folded: onToggle == null ? null : folded,
+        marks: [
+          if (project.project.pinned == true) ...[
+            const SizedBox(width: 6),
+            LucideIcon('pin', size: 13, color: hint),
+          ],
+        ],
+        dot: dot,
+        trailing: SizedBox.square(
+          dimension: 32,
+          child: IconButton(
+            key: ValueKey(
+              'side-new-${project.desktopId}-${project.project.id}',
+            ),
+            tooltip: state.tr('在此项目新对话', 'New conversation here'),
+            padding: EdgeInsets.zero,
+            onPressed: onNew,
+            icon: LucideIcon('plus', size: 16, color: hint),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 侧边栏一组的标题行：图标、名字、折叠箭头（[folded] 为 null 时没有）、
+/// [marks]、折叠后合成的状态点，[trailing] 贴着行尾。
+class _GroupTitle extends StatelessWidget {
+  const _GroupTitle({
+    super.key,
+    required this.onTap,
+    required this.leading,
+    required this.title,
+    required this.folded,
+    this.marks = const [],
+    this.dot,
+    this.trailing,
+  });
+  final VoidCallback onTap;
+  final Widget leading;
+  final String title;
+  final bool? folded;
+  final List<Widget> marks;
+  final Color? dot;
+  final Widget? trailing;
+
+  static const iconSize = 22.0, _gap = 10.0;
+
+  /// 名字起头离左边多远：组之间的分割线从这里起。
+  static const textStart = MobileSpace.md + iconSize + _gap;
+
+  @override
+  Widget build(BuildContext context) {
+    final hint = Theme.of(context).hintColor;
+    final dot = this.dot;
+    return InkWell(
+      borderRadius: BorderRadius.circular(MobileSizes.radius),
+      onTap: onTap,
+      child: SizedBox(
+        height: 46,
+        child: Row(
+          children: [
+            const SizedBox(width: MobileSpace.md),
+            SizedBox.square(
+              dimension: iconSize,
+              child: Center(child: leading),
+            ),
+            const SizedBox(width: _gap),
+            // 名字和角标占满中间，行尾的按钮贴着右边，和对话的时间对齐。
+            Expanded(
+              child: Row(
+                children: [
+                  Flexible(
+                    child: Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: MobileType.body,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
-                    if (onToggle != null) ...[
-                      const SizedBox(width: 4),
-                      AnimatedRotation(
-                        turns: folded ? -.25 : 0,
-                        duration: const Duration(milliseconds: 180),
-                        child: LucideIcon(
-                          'chevron-down',
-                          size: 14,
-                          color: hint,
-                        ),
-                      ),
-                    ],
-                    if (project.project.pinned == true) ...[
-                      const SizedBox(width: 6),
-                      LucideIcon('pin', size: 13, color: hint),
-                    ],
-                    if (dot != null) ...[
-                      const SizedBox(width: 8),
-                      _StatusDot(dot),
-                    ],
-                  ],
-                ),
-              ),
-              SizedBox.square(
-                dimension: 32,
-                child: IconButton(
-                  key: ValueKey(
-                    'side-new-${project.desktopId}-${project.project.id}',
                   ),
-                  tooltip: state.tr('在此项目新对话', 'New conversation here'),
-                  padding: EdgeInsets.zero,
-                  onPressed: onNew,
-                  icon: LucideIcon('plus', size: 16, color: hint),
-                ),
+                  if (folded case final folded?) ...[
+                    const SizedBox(width: 4),
+                    AnimatedRotation(
+                      turns: folded ? -.25 : 0,
+                      duration: const Duration(milliseconds: 180),
+                      child: LucideIcon('chevron-down', size: 14, color: hint),
+                    ),
+                  ],
+                  ...marks,
+                  if (dot != null) ...[
+                    const SizedBox(width: 8),
+                    _StatusDot(dot),
+                  ],
+                ],
               ),
+            ),
+            if (trailing case final trailing?) ...[
+              trailing,
               const SizedBox(width: MobileSpace.xs),
             ],
-          ),
+          ],
         ),
       ),
     );
@@ -767,11 +881,15 @@ class _SessionLine extends StatelessWidget {
     required this.session,
     required this.selected,
     required this.onTap,
+    this.showProject = false,
   });
   final AppState state;
   final SessionRef session;
   final bool selected;
   final VoidCallback onTap;
+
+  /// 不在项目下面时（置顶组），标题后面用灰字标出它的项目。
+  final bool showProject;
 
   @override
   Widget build(BuildContext context) {
@@ -779,11 +897,11 @@ class _SessionLine extends StatelessWidget {
     final scheme = theme.colorScheme;
     final ref = session;
     final dot = _statusColor(context, state, [ref]);
+    final project = showProject ? projectNameOf(state, ref) : null;
     return SessionPressRow(
       key: ValueKey('side-session-${ref.desktopId}-${ref.session.id}'),
       state: state,
       session: ref,
-      showHome: false,
       child: Material(
         color: selected ? scheme.secondaryContainer : Colors.transparent,
         borderRadius: BorderRadius.circular(MobileSizes.radius),
@@ -799,23 +917,42 @@ class _SessionLine extends StatelessWidget {
                   child: dot == null ? null : Center(child: _StatusDot(dot)),
                 ),
                 Expanded(
-                  child: Text(
-                    ref.session.title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    // 不加粗，选中只靠底色。
-                    style: TextStyle(
-                      fontSize: MobileType.sideItem,
-                      color: selected
-                          ? scheme.onSecondaryContainer
-                          : scheme.onSurface,
+                  // 放不下时先截标题，项目名尽量完整；太长的项目名最多占四成。
+                  child: LayoutBuilder(
+                    builder: (context, box) => Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            ref.session.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            // 不加粗，选中只靠底色。
+                            style: TextStyle(
+                              fontSize: MobileType.sideItem,
+                              color: selected
+                                  ? scheme.onSecondaryContainer
+                                  : scheme.onSurface,
+                            ),
+                          ),
+                        ),
+                        if (project != null) ...[
+                          const SizedBox(width: MobileSpace.sm),
+                          ConstrainedBox(
+                            constraints: BoxConstraints(
+                              maxWidth: box.maxWidth * .4,
+                            ),
+                            child: Text(
+                              project,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: MobileTheme.metaStyleOf(context),
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                   ),
                 ),
-                if (ref.session.pinned) ...[
-                  const SizedBox(width: 6),
-                  LucideIcon('pin', size: 12, color: theme.hintColor),
-                ],
                 const SizedBox(width: MobileSpace.sm),
                 Text(
                   sessionTime(state, ref.session.updatedAt),

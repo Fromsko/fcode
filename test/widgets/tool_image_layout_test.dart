@@ -1,8 +1,10 @@
 import 'package:baocode_mobile/chat/chat_models.dart';
 import 'package:baocode_mobile/chat/message_view.dart';
+import 'package:baocode_mobile/chat/widgets/image_deck.dart';
 import 'package:baocode_mobile/chat/widgets/step_header.dart';
 import 'package:baocode_mobile/chat/widgets/tool_call_row.dart';
 import 'package:baocode_mobile/state/app_state.dart';
+import 'package:baocode_mobile/ui/widgets/image_gallery.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -74,6 +76,57 @@ void main() {
     );
     expect(tester.takeException(), isNull);
     expect(tester.getSize(find.byType(StepHeader)).height, lessThan(40));
+  });
+
+  testWidgets('截图步骤收起时行尾只有小缩略图，点它直接看大图，不展开步骤', (tester) async {
+    var toggles = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ToolCallRow(
+            kind: ToolKind.read,
+            target: '截图.png',
+            onToggle: () => toggles++,
+            images: [
+              ImageAttachment(bytes: testImageBytes(), mediaType: 'image/png'),
+            ],
+          ),
+        ),
+      ),
+    );
+    final thumbnails = find.byKey(const ValueKey('step-thumbnails'));
+    expect(find.byType(ImageDeck), findsNothing);
+    expect(thumbnails, findsOneWidget);
+    expect(tester.getSize(thumbnails).height, lessThanOrEqualTo(24));
+
+    await tester.tap(thumbnails);
+    await tester.pumpAndSettle();
+    expect(find.byType(ImageGalleryPage), findsOneWidget);
+    expect(toggles, 0);
+  });
+
+  testWidgets('截图步骤展开后才显示完整图片，行尾缩略图收起；多张时写出其余张数', (tester) async {
+    Widget row(bool expanded) => MaterialApp(
+      home: Scaffold(
+        body: ToolCallRow(
+          kind: ToolKind.read,
+          target: '截图.png',
+          expanded: expanded,
+          onToggle: () {},
+          images: [
+            for (var i = 0; i < 3; i++)
+              ImageAttachment(bytes: testImageBytes(i), mediaType: 'image/png'),
+          ],
+        ),
+      ),
+    );
+    await tester.pumpWidget(row(false));
+    expect(find.text('+2'), findsOneWidget);
+    expect(find.byType(ImageDeck), findsNothing);
+
+    await tester.pumpWidget(row(true));
+    expect(find.byType(ImageDeck), findsOneWidget);
+    expect(find.byKey(const ValueKey('step-thumbnails')), findsNothing);
   });
 
   testWidgets('同一会话不同工具步骤的图片可在预览中左右切换', (tester) async {

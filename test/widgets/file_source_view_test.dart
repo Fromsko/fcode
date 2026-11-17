@@ -422,4 +422,35 @@ void main() {
     expect(horizontal.position.pixels, greaterThan(500));
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('跨行选中文字后把它滚出屏幕，复制工具条收起，不报错', (tester) async {
+    tester.view.physicalSize = const Size(400, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final text = List.generate(559, (i) => '<p>第 ${i + 1} 行</p>').join('\n');
+    await tester.pumpWidget(_app(FileSourceView(text: text, path: '课表.html')));
+    await tester.pumpAndSettle();
+    tester.widget<ListView>(find.byType(ListView)).controller!.jumpTo(600);
+    await tester.pump();
+    // 长按后往下拖，选中好几行。
+    final select = await tester.startGesture(const Offset(100, 400));
+    await tester.pump(const Duration(milliseconds: 600));
+    for (var i = 0; i < 8; i++) {
+      await select.moveBy(const Offset(0, 25));
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+    await select.up();
+    await tester.pumpAndSettle();
+    expect(find.text('Copy'), findsOneWidget);
+
+    for (final dy in [600.0, -600.0, -600.0, -600.0, 600.0, 600.0]) {
+      await tester.flingFrom(const Offset(320, 400), Offset(0, dy), 3000);
+      for (var i = 0; i < 20; i++) {
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+      expect(tester.takeException(), isNull);
+    }
+    expect(find.text('Copy'), findsNothing);
+  });
 }

@@ -8,6 +8,7 @@ import 'package:mermaid_flutter/mermaid_flutter.dart';
 
 import '../../theme/app_theme.dart';
 import '../../ui/widgets/copy_feedback.dart';
+import '../../ui/widgets/image_gallery.dart';
 import '../chat_models.dart' show ImageAttachment;
 import 'code_citation.dart';
 
@@ -175,33 +176,13 @@ class _MermaidCodeBlockState extends State<MermaidCodeBlock> with CopyFeedback {
     return picture;
   }
 
-  /// [scene] shown whole, as a picture is.
+  /// [scene] shown whole in the image viewer, as any picture is.
   Future<void> _preview(mermaid.RenderScene scene) async {
     final picture = await _picture(scene);
     if (!mounted) return;
-    await showDialog<void>(
-      context: context,
-      builder: (context) => Dialog.fullscreen(
-        child: Scaffold(
-          appBar: AppBar(
-            title: const Text('Mermaid'),
-            leading: IconButton(
-              tooltip: _label(context, '关闭', 'Close'),
-              icon: const Icon(Icons.close),
-              onPressed: () => Navigator.of(context).pop(),
-            ),
-          ),
-          body: Center(
-            child: InteractiveViewer(
-              minScale: 0.1,
-              maxScale: 8,
-              constrained: false,
-              child: Image.memory(picture.bytes),
-            ),
-          ),
-        ),
-      ),
-    );
+    await showImageGallery(context, [
+      GalleryImage(picture.bytes, name: 'Mermaid'),
+    ]);
   }
 
   @override

@@ -1,4 +1,4 @@
-import 'package:baocode_mobile/ui/files/line_diff.dart';
+import 'package:fromsko_mobile/ui/files/line_diff.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

@@ -1,15 +1,15 @@
 import 'dart:async';
 
 import 'package:bao_link/bao_link.dart';
-import 'package:baocode_mobile/models/user_facing_error.dart';
-import 'package:baocode_mobile/link/phone_link.dart';
-import 'package:baocode_mobile/state/app_state.dart';
-import 'package:baocode_mobile/theme/app_theme.dart';
-import 'package:baocode_mobile/ui/bots/bots_tab.dart';
-import 'package:baocode_mobile/ui/conversations/chats_tab.dart';
-import 'package:baocode_mobile/ui/files/files_tab.dart';
-import 'package:baocode_mobile/ui/widgets/lucide_icon.dart';
-import 'package:baocode_mobile/ui/widgets/mobile_widgets.dart' show ListRow;
+import 'package:fromsko_mobile/models/user_facing_error.dart';
+import 'package:fromsko_mobile/link/phone_link.dart';
+import 'package:fromsko_mobile/state/app_state.dart';
+import 'package:fromsko_mobile/theme/app_theme.dart';
+import 'package:fromsko_mobile/ui/bots/bots_tab.dart';
+import 'package:fromsko_mobile/ui/conversations/chats_tab.dart';
+import 'package:fromsko_mobile/ui/files/files_tab.dart';
+import 'package:fromsko_mobile/ui/widgets/lucide_icon.dart';
+import 'package:fromsko_mobile/ui/widgets/mobile_widgets.dart' show ListRow;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';

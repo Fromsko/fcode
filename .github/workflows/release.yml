@@ -1,0 +1,162 @@
+name: Release
+
+# 推 v* 标签时构建、签名、发布。
+#
+# 必须配置的仓库 Secrets：
+#   KEYSTORE_BASE64      fromsko-release.jks 的 base64（base64 -w0 fromsko-release.jks）
+#   KEYSTORE_PASSWORD    storePassword 与 keyPassword（本项目两者相同）
+#   KEY_ALIAS            keyAlias，默认 fromsko
+#
+# 三个都配好才会签名并发布；缺任何一个就只构建，产物留作 Actions artifact。
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      HAS_SIGNING: ${{ secrets.KEYSTORE_BASE64 != '' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Rust 1.97.1
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: '1.97.1'
+          targets: aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android
+
+      # ubuntu-latest 自带 Android SDK、build-tools 与 NDK，不需要 setup-android
+      # （那个 action 会去装已废弃的 tools 包而失败）。这里只补接受许可和 platform。
+      - name: Prepare Android SDK
+        shell: bash
+        run: |
+          set -eo pipefail
+          SDKMANAGER=$(ls "$ANDROID_HOME"/cmdline-tools/*/bin/sdkmanager | head -1)
+          # 不用 `yes | cmd`：pipefail 下 yes 收到 SIGPIPE 会让整步失败。
+          printf 'y\n%.0s' $(seq 1 50) | "$SDKMANAGER" --licenses > /dev/null || true
+          printf 'y\n%.0s' $(seq 1 50) | "$SDKMANAGER" "platforms;android-36" > /dev/null || true
+          echo "--- 已装 NDK ---"
+          ls "$ANDROID_HOME/ndk" || true
+
+      - name: Set up Flutter 3.47.9
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.9'
+          channel: stable
+          cache: true
+
+      - name: Resolve dependencies
+        run: flutter pub get
+
+      - name: Analyze
+        run: flutter analyze --no-pub
+
+      # integration_test 只是 dev 依赖，release 包里没有它，但生成的注册文件会引用，
+      # 导致编译失败。打包前摘掉那一段，见 tool/build_android.sh 的同款处理。
+      - name: Build release APK
+        run: |
+          set -euo pipefail
+          REGISTRANT=android/app/src/main/java/io/flutter/plugins/GeneratedPluginRegistrant.java
+          grep -q integration_test "$REGISTRANT"
+          awk '
+            /^    try \{$/ { block = $0; buffering = 1; next }
+            buffering { block = block ORS $0
+                        if ($0 ~ /^    }$/) { if (block !~ /integration_test/) print block; buffering = 0 }
+                        next }
+            { print }
+          ' "$REGISTRANT" > "$REGISTRANT.tmp"
+          mv "$REGISTRANT.tmp" "$REGISTRANT"
+          ! grep -q integration_test "$REGISTRANT"
+
+          flutter build apk --release --no-pub \
+            --target-platform android-arm64 -P arm64Only=true
+
+      # 版本号从 pubspec 读，产物名与本地脚本一致：fromsko-<版本>-<构建号>.apk
+      - name: Sign and name the APK
+        id: package
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+        run: |
+          set -euo pipefail
+          VERSION=$(sed -n 's/^version: *//p' pubspec.yaml | tr -d '\r')
+          NAME=${VERSION%%+*}
+          BUILD=${VERSION#*+}
+          OUT=build/app/outputs/flutter-apk
+          TARGET="$OUT/fromsko-$NAME-$BUILD.apk"
+          echo "name=$NAME" >> "$GITHUB_OUTPUT"
+          echo "build=$BUILD" >> "$GITHUB_OUTPUT"
+          echo "target=$TARGET" >> "$GITHUB_OUTPUT"
+
+          if [ -z "${KEYSTORE_BASE64:-}" ]; then
+            echo "::warning::没有配置签名 Secrets，产出未签名包"
+            mv "$OUT/app-release.apk" "$OUT/fromsko-$NAME-$BUILD-unsigned.apk"
+            echo "signed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks"
+          BT=$(ls -d "$ANDROID_HOME/build-tools/"* | sort -V | tail -1)
+          "$BT/zipalign" -f -p 4 "$OUT/app-release.apk" "$OUT/app-aligned.apk"
+          "$BT/apksigner" sign \
+            --ks "$RUNNER_TEMP/release.jks" \
+            --ks-pass "pass:$KEYSTORE_PASSWORD" \
+            --key-pass "pass:$KEYSTORE_PASSWORD" \
+            --ks-key-alias "${KEY_ALIAS:-fromsko}" \
+            --out "$TARGET" "$OUT/app-aligned.apk"
+          "$BT/apksigner" verify --print-certs "$TARGET"
+          rm -f "$RUNNER_TEMP/release.jks" "$OUT/app-aligned.apk"
+          echo "signed=true" >> "$GITHUB_OUTPUT"
+          ls -lh "$TARGET"
+
+      # 用仓库自带的生成器，不重复实现 latest.json 的格式
+      - name: Build latest.json
+        if: steps.package.outputs.signed == 'true'
+        run: |
+          set -euo pipefail
+          dart run tool/release_manifest.dart
+          cat build/app/outputs/flutter-apk/latest.json
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: fromsko-apk
+          path: |
+            build/app/outputs/flutter-apk/fromsko-*.apk
+            build/app/outputs/flutter-apk/latest.json
+          if-no-files-found: warn
+          retention-days: 30
+
+      # 说明取 latest.json 的 body 字段（英文在前，<!-- zh --> 之后是中文），
+      # 附件是签名 APK 与 latest.json 本身。
+      - name: Publish release
+        if: startsWith(github.ref, 'refs/tags/v') && steps.package.outputs.signed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          OUT=build/app/outputs/flutter-apk
+          jq -r .body "$OUT/latest.json" > "$RUNNER_TEMP/release-notes.md"
+          # 同一个标签重跑时先清掉旧 Release：gh release create 遇到同名会直接失败。
+          gh release delete "$GITHUB_REF_NAME" --yes --cleanup-tag=false 2>/dev/null || true
+          gh release create "$GITHUB_REF_NAME" \
+            --title "Fromsko ${{ steps.package.outputs.name }}" \
+            --notes-file "$RUNNER_TEMP/release-notes.md" \
+            "$OUT/fromsko-${{ steps.package.outputs.name }}-${{ steps.package.outputs.build }}.apk" \
+            "$OUT/latest.json"

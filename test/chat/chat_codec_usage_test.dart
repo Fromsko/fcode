@@ -1,8 +1,8 @@
 import 'dart:typed_data';
 
-import 'package:baocode_mobile/chat/chat_models.dart';
-import 'package:baocode_mobile/link/chat_codec.dart';
-import 'package:baocode_mobile/chat/widgets/agent_step.dart';
+import 'package:fromsko_mobile/chat/chat_models.dart';
+import 'package:fromsko_mobile/link/chat_codec.dart';
+import 'package:fromsko_mobile/chat/widgets/agent_step.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

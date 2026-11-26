@@ -1,13 +1,13 @@
 import 'dart:convert';
 
-import 'package:baocode_mobile/chat/chat_clipboard.dart';
-import 'package:baocode_mobile/chat/chat_models.dart';
+import 'package:fromsko_mobile/chat/chat_clipboard.dart';
+import 'package:fromsko_mobile/chat/chat_models.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-  const channel = MethodChannel('local.baocode.mobile/platform');
+  const channel = MethodChannel('local.fromsko.mobile/platform');
   const codec = StandardMessageCodec();
   final messenger =
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;

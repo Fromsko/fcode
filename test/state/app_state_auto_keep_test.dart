@@ -1,10 +1,10 @@
 import 'package:bao_link/bao_link.dart';
-import 'package:baocode_mobile/link/phone_link.dart';
-import 'package:baocode_mobile/state/app_state.dart';
+import 'package:fromsko_mobile/link/phone_link.dart';
+import 'package:fromsko_mobile/state/app_state.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-const _channel = MethodChannel('local.baocode.mobile/platform');
+const _channel = MethodChannel('local.fromsko.mobile/platform');
 
 class _FakeLink extends PhoneLink {
   _FakeLink(LinkStore store) : super(store: store);

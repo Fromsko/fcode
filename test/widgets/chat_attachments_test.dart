@@ -1,11 +1,11 @@
-// YCode — GPL-3.0-only.
+// Fromsko — GPL-3.0-only.
 import 'dart:async';
 import 'dart:convert';
 
 import 'package:bao_link/bao_link.dart';
-import 'package:baocode_mobile/state/conversation_input.dart';
-import 'package:baocode_mobile/chat/widgets/image_deck.dart';
-import 'package:baocode_mobile/chat/widgets/message_pictures.dart';
+import 'package:fromsko_mobile/state/conversation_input.dart';
+import 'package:fromsko_mobile/chat/widgets/image_deck.dart';
+import 'package:fromsko_mobile/chat/widgets/message_pictures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -124,7 +124,7 @@ void main() {
         };
         Uint8List? copied;
         String? plain;
-        const channel = MethodChannel('local.baocode.mobile/platform');
+        const channel = MethodChannel('local.fromsko.mobile/platform');
         tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
           channel,
           (call) async {
@@ -201,7 +201,7 @@ void main() {
         {'bytes': bytes, 'type': 'image/png', 'name': 'two.png'},
       ],
     })!;
-    const channel = MethodChannel('local.baocode.mobile/platform');
+    const channel = MethodChannel('local.fromsko.mobile/platform');
     tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
       channel,
       (call) async => call.method == 'readChatClipboard'
@@ -277,7 +277,7 @@ void main() {
         {'bytes': base64Decode(png), 'type': 'image/png', 'name': 'next.png'},
       ],
     })!;
-    const channel = MethodChannel('local.baocode.mobile/platform');
+    const channel = MethodChannel('local.fromsko.mobile/platform');
     tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
       channel,
       (call) async => call.method == 'readChatClipboard'
@@ -325,7 +325,7 @@ void main() {
   testWidgets('图文副本不可用时保留当前草稿并提示重新复制', (tester) async {
     final state = ChatPageState();
     addTearDown(state.dispose);
-    const channel = MethodChannel('local.baocode.mobile/platform');
+    const channel = MethodChannel('local.fromsko.mobile/platform');
     tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
       channel,
       (_) async => throw PlatformException(code: 'clipboard_unavailable'),
@@ -359,7 +359,7 @@ void main() {
   testWidgets('复制失败明确提示，不显示已复制', (tester) async {
     final state = ChatPageState();
     addTearDown(state.dispose);
-    const channel = MethodChannel('local.baocode.mobile/platform');
+    const channel = MethodChannel('local.fromsko.mobile/platform');
     tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
       channel,
       (_) async => throw PlatformException(code: 'clipboard_failed'),

@@ -25,7 +25,7 @@ class MemoryLinkStore implements LinkStore {
 
 /// The native implementation must use the OS credential store, not preferences.
 class PlatformLinkStore implements LinkStore {
-  static const _channel = MethodChannel('local.baocode.mobile/platform');
+  static const _channel = MethodChannel('local.fromsko.mobile/platform');
 
   @override
   Future<String?> read(String key) =>

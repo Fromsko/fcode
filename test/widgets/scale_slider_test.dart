@@ -1,4 +1,4 @@
-import 'package:baocode_mobile/ui/widgets/scale_slider.dart';
+import 'package:fromsko_mobile/ui/widgets/scale_slider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 

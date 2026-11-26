@@ -3,10 +3,10 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:bao_link/bao_link.dart';
-import 'package:baocode_mobile/link/link_store.dart';
-import 'package:baocode_mobile/models/user_facing_error.dart';
-import 'package:baocode_mobile/state/app_state.dart';
-import 'package:baocode_mobile/state/upload_file.dart';
+import 'package:fromsko_mobile/link/link_store.dart';
+import 'package:fromsko_mobile/models/user_facing_error.dart';
+import 'package:fromsko_mobile/state/app_state.dart';
+import 'package:fromsko_mobile/state/upload_file.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -18,7 +18,7 @@ class _State extends AppState {
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-  const channel = MethodChannel('local.baocode.mobile/platform');
+  const channel = MethodChannel('local.fromsko.mobile/platform');
   late _State state;
   setUp(() => state = _State());
   tearDown(() {

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:baocode_mobile/ui/widgets/top_hint.dart';
+import 'package:fromsko_mobile/ui/widgets/top_hint.dart';
 
 Future<BuildContext> _pump(WidgetTester tester, {double keyboard = 0}) async {
   tester.view

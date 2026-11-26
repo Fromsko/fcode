@@ -1,8 +1,8 @@
-import 'package:baocode_mobile/link/phone_link.dart';
-import 'package:baocode_mobile/state/app_state.dart';
-import 'package:baocode_mobile/ui/settings/settings_page.dart';
-import 'package:baocode_mobile/theme/app_theme.dart';
-import 'package:baocode_mobile/ui/widgets/mobile_widgets.dart';
+import 'package:fromsko_mobile/link/phone_link.dart';
+import 'package:fromsko_mobile/state/app_state.dart';
+import 'package:fromsko_mobile/ui/settings/settings_page.dart';
+import 'package:fromsko_mobile/theme/app_theme.dart';
+import 'package:fromsko_mobile/ui/widgets/mobile_widgets.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -63,7 +63,7 @@ void main() {
     permission = false;
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(
-          const MethodChannel('local.baocode.mobile/platform'),
+          const MethodChannel('local.fromsko.mobile/platform'),
           (call) async => switch (call.method) {
             'notificationPermission' => permission,
             'requestNotificationPermission' => permission,
@@ -74,7 +74,7 @@ void main() {
   tearDown(() {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(
-          const MethodChannel('local.baocode.mobile/platform'),
+          const MethodChannel('local.fromsko.mobile/platform'),
           null,
         );
     state.dispose();
@@ -231,7 +231,7 @@ void main() {
     final requested = <String>[];
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(
-          const MethodChannel('local.baocode.mobile/platform'),
+          const MethodChannel('local.fromsko.mobile/platform'),
           (call) async {
             requested.add(call.method);
             return true;

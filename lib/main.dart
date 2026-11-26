@@ -170,7 +170,7 @@ class _MobileAppState extends State<MobileApp> with WidgetsBindingObserver {
       messageScale: state.settings.textScale,
     );
     return MaterialApp(
-      title: 'YCode',
+      title: 'Fromsko',
       debugShowCheckedModeBanner: false,
       theme: themes.light,
       darkTheme: themes.dark,

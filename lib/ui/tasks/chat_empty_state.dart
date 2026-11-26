@@ -50,7 +50,7 @@ class ChatEmptyState extends StatelessWidget {
                   children: [
                     Center(
                       child: SvgPicture.asset(
-                        'assets/icons/ycode.svg',
+                        'assets/icons/fromsko.svg',
                         width: 56,
                         height: 56,
                       ),

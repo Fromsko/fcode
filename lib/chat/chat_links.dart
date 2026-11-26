@@ -1,4 +1,4 @@
-// YCode — conversation UI. GPL-3.0-only.
+// Fromsko — conversation UI. GPL-3.0-only.
 
 import 'package:bao_link/bao_link.dart';
 import 'package:flutter/material.dart';

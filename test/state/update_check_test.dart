@@ -1,15 +1,15 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:baocode_mobile/models/user_facing_error.dart';
-import 'package:baocode_mobile/state/app_state.dart';
-import 'package:baocode_mobile/state/update_check.dart';
+import 'package:fromsko_mobile/models/user_facing_error.dart';
+import 'package:fromsko_mobile/state/app_state.dart';
+import 'package:fromsko_mobile/state/update_check.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 String releaseJson({
   String tag = 'v0.3.0',
   String notes = '更稳了',
-  String url = 'https://github.com/shuishani/ycode/releases/tag/v0.3.0',
+  String url = 'https://github.com/Fromsko/fcode/releases/tag/v0.3.0',
 }) => jsonEncode({'tag_name': tag, 'body': notes, 'html_url': url});
 
 void main() {
@@ -49,7 +49,7 @@ void main() {
   group('解析 release', () {
     test('取出标签、说明和页面，标签去掉 v', () {
       final release = parseRelease(
-        '{"tag_name":"v0.3.1","body":"修了几个问题","html_url":"https://github.com/shuishani/ycode/releases/tag/v0.3.1"}',
+        '{"tag_name":"v0.3.1","body":"修了几个问题","html_url":"https://github.com/Fromsko/fcode/releases/tag/v0.3.1"}',
       );
       expect(release.version, '0.3.1');
       expect(release.notes, '修了几个问题');
@@ -66,7 +66,7 @@ void main() {
     test('没有说明正文时为空', () {
       expect(
         parseRelease(
-          '{"tag_name":"v0.3.0","html_url":"https://github.com/shuishani/ycode/releases/tag/v0.3.0"}',
+          '{"tag_name":"v0.3.0","html_url":"https://github.com/Fromsko/fcode/releases/tag/v0.3.0"}',
         ).notes,
         '',
       );
@@ -102,18 +102,18 @@ void main() {
       final release = parseRelease(
         jsonEncode({
           'tag_name': 'v0.3.0',
-          'html_url': 'https://github.com/shuishani/ycode/releases/tag/v0.3.0',
+          'html_url': 'https://github.com/Fromsko/fcode/releases/tag/v0.3.0',
           'assets': [
             {
-              'name': 'ycode-0.3.0.apk',
-              'browser_download_url': 'https://github.com/shuishani/ycode/releases/download/v0.3.0/ycode-0.3.0.apk',
+              'name': 'fromsko-0.3.0.apk',
+              'browser_download_url': 'https://github.com/Fromsko/fcode/releases/download/v0.3.0/fromsko-0.3.0.apk',
               'size': 1234,
               'digest': 'sha256:${'a' * 64}',
             },
           ],
         }),
       );
-      expect(release.apk?.name, 'ycode-0.3.0.apk');
+      expect(release.apk?.name, 'fromsko-0.3.0.apk');
       expect(release.apk?.size, 1234);
       expect(release.apk?.sha256, 'a' * 64);
     });
@@ -121,18 +121,18 @@ void main() {
     test('外部地址、错误架构和空安装包不能作为更新', () {
       for (final asset in [
         {
-          'name': 'ycode.apk',
+          'name': 'fromsko.apk',
           'browser_download_url': 'https://example.com/a.apk',
           'size': 12,
         },
         {
-          'name': 'ycode-x86_64.apk',
-          'browser_download_url': 'https://github.com/shuishani/ycode/releases/download/v0.3.0/a.apk',
+          'name': 'fromsko-x86_64.apk',
+          'browser_download_url': 'https://github.com/Fromsko/fcode/releases/download/v0.3.0/a.apk',
           'size': 12,
         },
         {
-          'name': 'ycode.apk',
-          'browser_download_url': 'https://github.com/shuishani/ycode/releases/download/v0.3.0/a.apk',
+          'name': 'fromsko.apk',
+          'browser_download_url': 'https://github.com/Fromsko/fcode/releases/download/v0.3.0/a.apk',
           'size': 0,
         },
       ]) {
@@ -140,7 +140,7 @@ void main() {
           jsonEncode({
             'tag_name': 'v0.3.0',
             'html_url':
-                'https://github.com/shuishani/ycode/releases/tag/v0.3.0',
+                'https://github.com/Fromsko/fcode/releases/tag/v0.3.0',
             'assets': [asset],
           }),
         );
@@ -149,14 +149,23 @@ void main() {
     });
   });
 
+  // 自动更新默认关闭（fromskoUpdatesEnabled = false）：这些用例验证的是
+  // 「会发起请求」的行为。开关打开后它们才有意义，所以在关闭时整体跳过。
   group('打开应用时自动检查', () {
+    if (!fromskoUpdatesEnabled) {
+      test('自动更新关闭时不做任何检查', () {
+        expect(fromskoUpdatesEnabled, isFalse);
+      });
+      return;
+    }
+
     String withApk() => jsonEncode({
       'tag_name': 'v0.3.0',
-      'html_url': 'https://github.com/shuishani/ycode/releases/tag/v0.3.0',
+      'html_url': 'https://github.com/Fromsko/fcode/releases/tag/v0.3.0',
       'assets': [
         {
-          'name': 'ycode-0.3.0-40.apk',
-          'browser_download_url': 'https://github.com/shuishani/ycode/releases/download/v0.3.0/ycode-0.3.0-40.apk',
+          'name': 'fromsko-0.3.0-40.apk',
+          'browser_download_url': 'https://github.com/Fromsko/fcode/releases/download/v0.3.0/fromsko-0.3.0-40.apk',
           'size': 1234,
         },
       ],
@@ -349,11 +358,11 @@ void main() {
       }
       expect(
         updateManifestUrl,
-        'https://github.com/shuishani/ycode/releases/latest/download/latest.json',
+        'https://github.com/Fromsko/fcode/releases/latest/download/latest.json',
       );
       expect(
         updateReleaseApi,
-        contains('/repos/shuishani/ycode/releases/latest'),
+        contains('/repos/Fromsko/fcode/releases/latest'),
       );
     });
   });

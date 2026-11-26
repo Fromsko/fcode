@@ -1,11 +1,11 @@
-import 'package:baocode_mobile/ui/widgets/mobile_widgets.dart';
-import 'package:baocode_mobile/chat/chat_models.dart';
-import 'package:baocode_mobile/chat/message_view.dart';
-import 'package:baocode_mobile/chat/widgets/step_images.dart';
-import 'package:baocode_mobile/ui/widgets/image_gallery.dart';
+import 'package:fromsko_mobile/ui/widgets/mobile_widgets.dart';
+import 'package:fromsko_mobile/chat/chat_models.dart';
+import 'package:fromsko_mobile/chat/message_view.dart';
+import 'package:fromsko_mobile/chat/widgets/step_images.dart';
+import 'package:fromsko_mobile/ui/widgets/image_gallery.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:baocode_mobile/state/app_state.dart';
+import 'package:fromsko_mobile/state/app_state.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../support/image_test_support.dart';
@@ -120,7 +120,7 @@ void main() {
 
   testWidgets('预览复制的是当前页原图，而不是文件名或图片编号', (tester) async {
     Map? copied;
-    const channel = MethodChannel('local.baocode.mobile/platform');
+    const channel = MethodChannel('local.fromsko.mobile/platform');
     tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(channel, (
       call,
     ) async {

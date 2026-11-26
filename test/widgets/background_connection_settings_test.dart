@@ -1,5 +1,5 @@
-import 'package:baocode_mobile/state/background_connection.dart';
-import 'package:baocode_mobile/ui/settings/settings_page.dart';
+import 'package:fromsko_mobile/state/background_connection.dart';
+import 'package:fromsko_mobile/ui/settings/settings_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -17,7 +17,7 @@ void main() {
   final platformCalls = <String>[];
   final messenger =
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
-  const platform = MethodChannel('local.baocode.mobile/platform');
+  const platform = MethodChannel('local.fromsko.mobile/platform');
 
   setUp(() {
     // 这里测的是用户从「关」拨到「开」；新装默认开着另有单测。

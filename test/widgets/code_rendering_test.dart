@@ -1,7 +1,7 @@
-import 'package:baocode_mobile/chat/ansi_text.dart';
-import 'package:baocode_mobile/theme/code_highlight.dart';
+import 'package:fromsko_mobile/chat/ansi_text.dart';
+import 'package:fromsko_mobile/theme/code_highlight.dart';
 import 'package:flutter/material.dart';
-import 'package:baocode_mobile/state/app_state.dart';
+import 'package:fromsko_mobile/state/app_state.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 Widget host(Widget child, {Brightness brightness = Brightness.light}) =>

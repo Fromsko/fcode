@@ -1,10 +1,10 @@
-import 'package:baocode_mobile/chat/chat_models.dart';
-import 'package:baocode_mobile/chat/message_view.dart';
-import 'package:baocode_mobile/chat/widgets/image_deck.dart';
-import 'package:baocode_mobile/chat/widgets/step_header.dart';
-import 'package:baocode_mobile/chat/widgets/tool_call_row.dart';
-import 'package:baocode_mobile/state/app_state.dart';
-import 'package:baocode_mobile/ui/widgets/image_gallery.dart';
+import 'package:fromsko_mobile/chat/chat_models.dart';
+import 'package:fromsko_mobile/chat/message_view.dart';
+import 'package:fromsko_mobile/chat/widgets/image_deck.dart';
+import 'package:fromsko_mobile/chat/widgets/step_header.dart';
+import 'package:fromsko_mobile/chat/widgets/tool_call_row.dart';
+import 'package:fromsko_mobile/state/app_state.dart';
+import 'package:fromsko_mobile/ui/widgets/image_gallery.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 

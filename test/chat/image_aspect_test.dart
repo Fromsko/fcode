@@ -1,6 +1,6 @@
 import 'dart:typed_data';
 
-import 'package:baocode_mobile/chat/widgets/image_aspect.dart';
+import 'package:fromsko_mobile/chat/widgets/image_aspect.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 Uint8List _png(int width, int height) {

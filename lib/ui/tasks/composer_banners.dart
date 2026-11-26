@@ -1,4 +1,4 @@
-// YCode — GPL-3.0-only.
+// Fromsko — GPL-3.0-only.
 import 'package:flutter/material.dart';
 
 import '../../state/local_message_queue.dart';

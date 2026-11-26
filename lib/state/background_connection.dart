@@ -7,7 +7,7 @@ import 'package:flutter/services.dart';
 class BackgroundConnection extends ChangeNotifier {
   BackgroundConnection({DateTime Function()? now}) : _now = now ?? DateTime.now;
 
-  static const channel = MethodChannel('local.baocode.mobile/background');
+  static const channel = MethodChannel('local.fromsko.mobile/background');
   final DateTime Function() _now;
   bool running = false;
 

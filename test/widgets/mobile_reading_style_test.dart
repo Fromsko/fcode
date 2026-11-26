@@ -1,11 +1,11 @@
-import 'package:baocode_mobile/chat/chat_models.dart';
-import 'package:baocode_mobile/chat/message_view.dart';
-import 'package:baocode_mobile/chat/widgets/thinking_section.dart';
-import 'package:baocode_mobile/link/link_store.dart';
-import 'package:baocode_mobile/state/app_state.dart';
-import 'package:baocode_mobile/theme/app_theme.dart';
-import 'package:baocode_mobile/ui/files/files_tab.dart';
-import 'package:baocode_mobile/ui/files/line_diff.dart';
+import 'package:fromsko_mobile/chat/chat_models.dart';
+import 'package:fromsko_mobile/chat/message_view.dart';
+import 'package:fromsko_mobile/chat/widgets/thinking_section.dart';
+import 'package:fromsko_mobile/link/link_store.dart';
+import 'package:fromsko_mobile/state/app_state.dart';
+import 'package:fromsko_mobile/theme/app_theme.dart';
+import 'package:fromsko_mobile/ui/files/files_tab.dart';
+import 'package:fromsko_mobile/ui/files/line_diff.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 

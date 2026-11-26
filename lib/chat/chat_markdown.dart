@@ -1,4 +1,4 @@
-// YCode — conversation UI. GPL-3.0-only.
+// Fromsko — conversation UI. GPL-3.0-only.
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';

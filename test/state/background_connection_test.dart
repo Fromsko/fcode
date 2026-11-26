@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:baocode_mobile/state/background_connection.dart';
+import 'package:fromsko_mobile/state/background_connection.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 

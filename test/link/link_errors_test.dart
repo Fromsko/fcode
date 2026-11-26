@@ -1,6 +1,6 @@
 import 'package:bao_link/bao_link.dart';
-import 'package:baocode_mobile/link/link_errors.dart';
-import 'package:baocode_mobile/link/phone_link.dart'
+import 'package:fromsko_mobile/link/link_errors.dart';
+import 'package:fromsko_mobile/link/phone_link.dart'
     show PairingStorageException;
 import 'package:flutter_test/flutter_test.dart';
 

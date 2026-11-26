@@ -1,4 +1,4 @@
-import 'package:baocode_mobile/models/project_icon.dart';
+import 'package:fromsko_mobile/models/project_icon.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

@@ -425,7 +425,7 @@ class PhoneLink extends ChangeNotifier {
   }
 
   Map<String, Object?> get _hello => {
-    'name': 'YCode',
+    'name': 'Fromsko',
     'system': Platform.operatingSystem,
   };
 

@@ -1,0 +1,60 @@
+Fromsko
+=======
+
+本程序是 **YCode** 的衍生版本。YCode 是一个 BaoCode 桌面版的非官方 Android 客户端。
+
+上游项目
+--------
+
+    YCode
+    Copyright (C) 2026 shuishan
+    https://github.com/shuishani/ycode
+    License: GPL-3.0-only
+
+本版本基于上游 YCode **0.2.2**（git 提交 f97fa5e）的源码开发。
+
+再由
+----
+
+    Fromsko（本项目）
+    https://github.com/Fromsko/fromsko
+    License: GPL-3.0-only（与上游相同）
+
+改动说明
+--------
+
+依据 GPL-3.0 第 5 条，此衍生版本相对上游做了以下修改：
+
+**一、品牌与标识**
+
+- 应用名 YCode → Fromsko，包名 `local.ycode.mobile` → `local.fromsko.mobile`
+- Dart 包名 `baocode_mobile` → `fromsko_mobile`
+- Kotlin / Java 源码包 `local.baocode.mobile` → `local.fromsko.mobile`
+- 所有 MethodChannel / EventChannel 通道名同步改名
+- 应用图标、通知栏小图标由字母 Y 改为字母 F
+- 界面中所有 "YCode" 文案改为 "Fromsko"
+
+**二、新增功能：EasyTier 组网**
+
+- 新增 `android/.../MeshBridge.kt`：EasyTier SDK 的原生桥接层
+- 新增 `lib/mesh/mesh_controller.dart`、`lib/mesh/mesh_store.dart`、`lib/ui/settings/mesh_page.dart`
+- 设置页新增「组网」入口
+- 引入 EasyTier Android SDK（`android/app/libs/easytier-sdk-0.1.0.aar`）
+- 支持：节点列表（名字 / 虚拟 IP / 真实 RTT / 直连或中继）、每节点流量统计、
+  TCP 连通性探测、网络配置持久化
+
+**三、关闭上游自动更新**
+
+- `lib/state/update_check.dart` 中的 `fromskoUpdatesEnabled` 设为 `false`
+- 原因：上游 Releases 发布的是 YCode 签名的包，本版本包名与签名均不同，无法覆盖安装
+
+上游内容未改动的部分
+--------------------
+
+除上述改动外，本项目的其余代码、文档与资源均沿用上游 YCode，版权归原作者 shuishan 及
+其贡献者所有。第三方组件的许可见 `THIRD_PARTY_NOTICES.md`。
+
+许可证全文
+----------
+
+见 `LICENSE`（GNU General Public License v3.0）。

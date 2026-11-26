@@ -5,8 +5,8 @@ import 'package:bao_link/bao_link_io.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:baocode_mobile/link/phone_link.dart';
-import 'package:baocode_mobile/state/app_state.dart';
+import 'package:fromsko_mobile/link/phone_link.dart';
+import 'package:fromsko_mobile/state/app_state.dart';
 
 import '../../tool/fixture_desktop.dart' as fixture;
 
@@ -16,8 +16,8 @@ void main() {
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
   setUpAll(() {
     for (final name in [
-      'local.baocode.mobile/platform',
-      'local.baocode.mobile/discovery',
+      'local.fromsko.mobile/platform',
+      'local.fromsko.mobile/discovery',
     ]) {
       messenger.setMockMethodCallHandler(
         MethodChannel(name),
@@ -27,8 +27,8 @@ void main() {
   });
   tearDownAll(() {
     for (final name in [
-      'local.baocode.mobile/platform',
-      'local.baocode.mobile/discovery',
+      'local.fromsko.mobile/platform',
+      'local.fromsko.mobile/discovery',
     ]) {
       messenger.setMockMethodCallHandler(MethodChannel(name), null);
     }
@@ -301,7 +301,7 @@ void main() {
     () async {
       final notification = Completer<Map<Object?, Object?>>();
       messenger.setMockMethodCallHandler(
-        const MethodChannel('local.baocode.mobile/platform'),
+        const MethodChannel('local.fromsko.mobile/platform'),
         (call) async {
           if (call.method == 'notify' && !notification.isCompleted) {
             notification.complete(
@@ -313,7 +313,7 @@ void main() {
       );
       addTearDown(
         () => messenger.setMockMethodCallHandler(
-          const MethodChannel('local.baocode.mobile/platform'),
+          const MethodChannel('local.fromsko.mobile/platform'),
           (_) async => null,
         ),
       );

@@ -30,7 +30,7 @@ class UploadUnconfirmed extends UserFacingError {
   const UploadUnconfirmed(super.message);
 }
 
-const _platform = MethodChannel('local.baocode.mobile/platform');
+const _platform = MethodChannel('local.fromsko.mobile/platform');
 
 Future<UploadFile?> pickUploadFile(AppState state) async {
   try {

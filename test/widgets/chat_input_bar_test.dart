@@ -1,5 +1,5 @@
-import 'package:baocode_mobile/ui/tasks/chat_composer_action.dart';
-import 'package:baocode_mobile/ui/tasks/chat_input_bar.dart';
+import 'package:fromsko_mobile/ui/tasks/chat_composer_action.dart';
+import 'package:fromsko_mobile/ui/tasks/chat_input_bar.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 

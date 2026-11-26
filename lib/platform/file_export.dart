@@ -46,7 +46,7 @@ Future<bool> saveFile(String name, Uint8List bytes) async {
   if (bytes.length > LinkLimits.download) {
     throw const DownloadTooLargeException();
   }
-  final saved = await const MethodChannel('local.baocode.mobile/platform')
+  final saved = await const MethodChannel('local.fromsko.mobile/platform')
       .invokeMethod<bool>('saveFile', {'name': name, 'bytes': bytes});
   if (saved == null) throw const FormatException('未收到文件保存结果');
   return saved;

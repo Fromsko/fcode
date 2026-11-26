@@ -50,7 +50,7 @@ class ApkDownloader {
       final request = await client
           .getUrl(apk.url)
           .timeout(const Duration(seconds: 20));
-      request.headers.set(HttpHeaders.userAgentHeader, 'YCode-Android');
+      request.headers.set(HttpHeaders.userAgentHeader, 'Fromsko-Android');
       // 对下载长度和摘要按 APK 原始字节校验，不接受透明解压。
       client.autoUncompress = false;
       final response = await request.close().timeout(
@@ -65,7 +65,7 @@ class ApkDownloader {
       }
       await directory.create(recursive: true);
       // 固定文件名：每次下载覆盖上一份，缓存里不会越积越多。
-      file = File('${directory.path}/ycode-update.apk.part');
+      file = File('${directory.path}/fromsko-update.apk.part');
       sink = file.openWrite();
       var received = 0;
       await for (final bytes in response.timeout(const Duration(seconds: 30))) {
@@ -92,7 +92,7 @@ class ApkDownloader {
         }
       }
       if (_cancelled) throw const ApkDownloadCancelled();
-      final verified = await file.rename('${directory.path}/ycode-update.apk');
+      final verified = await file.rename('${directory.path}/fromsko-update.apk');
       complete = true;
       return verified;
     } on ApkDownloadException {
@@ -124,7 +124,7 @@ class ApkDownloader {
 
 class AndroidUpdateInstaller {
   const AndroidUpdateInstaller();
-  static const _channel = MethodChannel('local.baocode.mobile/platform');
+  static const _channel = MethodChannel('local.fromsko.mobile/platform');
 
   Future<Directory> directory() async {
     final path = await _channel.invokeMethod<String>('updateDirectory');

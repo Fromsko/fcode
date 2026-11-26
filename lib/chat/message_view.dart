@@ -1,4 +1,4 @@
-// YCode — conversation UI. GPL-3.0-only.
+// Fromsko — conversation UI. GPL-3.0-only.
 // Reuses BaoCode's GPL chat models and wire codec.
 import 'dart:convert';
 

@@ -5,7 +5,7 @@ plugins {
 }
 
 android {
-    namespace = "local.baocode.mobile"
+    namespace = "local.fromsko.mobile"
     compileSdk = 36
     ndkVersion = flutter.ndkVersion
 
@@ -19,9 +19,9 @@ android {
     defaultConfig {
         // -P testInstall=true: beside the installed one, its pairing untouched.
         val testInstall = project.hasProperty("testInstall")
-        applicationId = "local.ycode.mobile" + if (testInstall) ".test" else ""
+        applicationId = "local.fromsko.mobile" + if (testInstall) ".test" else ""
         manifestPlaceholders["appLabel"] =
-            "YCode" + if (testInstall) " 测试" else ""
+            "Fromsko" + if (testInstall) " 测试" else ""
         minSdk = 24
         targetSdk = 36
         versionCode = flutter.versionCode
@@ -51,4 +51,6 @@ flutter {
 
 dependencies {
     testImplementation("junit:junit:4.13.2")
+    // EasyTier 组网 SDK（本地 AAR，arm64-v8a + x86_64 双 ABI）
+    implementation(files("libs/easytier-sdk-0.1.0.aar"))
 }

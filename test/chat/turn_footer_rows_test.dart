@@ -1,5 +1,5 @@
-import 'package:baocode_mobile/chat/chat_models.dart';
-import 'package:baocode_mobile/chat/chat_output.dart';
+import 'package:fromsko_mobile/chat/chat_models.dart';
+import 'package:fromsko_mobile/chat/chat_output.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 List<ChatRow> rows(

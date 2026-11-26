@@ -1,4 +1,4 @@
-# YCode
+# Fromsko
 
 - 文案统一双语：有 `AppState` 用 `state.tr`，否则用 `AppState.phrase`；错误走 `userMessage`，不显示异常原文。
 - 术语统一叫「电脑」；连接状态复用 `linkStatusLabel()`。

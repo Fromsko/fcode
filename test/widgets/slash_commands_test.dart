@@ -1,4 +1,4 @@
-import 'package:baocode_mobile/ui/tasks/slash_commands.dart';
+import 'package:fromsko_mobile/ui/tasks/slash_commands.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 

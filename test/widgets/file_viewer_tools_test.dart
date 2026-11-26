@@ -1,9 +1,9 @@
 import 'package:bao_link/bao_link.dart';
-import 'package:baocode_mobile/chat/markdown/markdown_view.dart';
-import 'package:baocode_mobile/link/link_store.dart';
-import 'package:baocode_mobile/state/app_state.dart';
-import 'package:baocode_mobile/theme/app_theme.dart';
-import 'package:baocode_mobile/ui/files/files_tab.dart';
+import 'package:fromsko_mobile/chat/markdown/markdown_view.dart';
+import 'package:fromsko_mobile/link/link_store.dart';
+import 'package:fromsko_mobile/state/app_state.dart';
+import 'package:fromsko_mobile/theme/app_theme.dart';
+import 'package:fromsko_mobile/ui/files/files_tab.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';

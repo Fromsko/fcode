@@ -1,13 +1,13 @@
 import 'dart:convert';
 
 import 'package:bao_link/bao_link.dart';
-import 'package:baocode_mobile/platform/file_export.dart';
+import 'package:fromsko_mobile/platform/file_export.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-  const channel = MethodChannel('local.baocode.mobile/platform');
+  const channel = MethodChannel('local.fromsko.mobile/platform');
 
   tearDown(() {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger

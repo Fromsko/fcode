@@ -1,6 +1,6 @@
-// YCode — GPL-3.0-only.
-import 'package:baocode_mobile/link/link_store.dart';
-import 'package:baocode_mobile/state/app_state.dart';
+// Fromsko — GPL-3.0-only.
+import 'package:fromsko_mobile/link/link_store.dart';
+import 'package:fromsko_mobile/state/app_state.dart';
 
 /// 一段放在内存里的对话，不连电脑。[zh] 固定界面语言；不给就走设置。
 class ChatTestState extends AppState {

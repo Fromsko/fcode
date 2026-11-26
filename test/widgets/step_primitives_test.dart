@@ -1,10 +1,10 @@
-// YCode — GPL-3.0-only.
+// Fromsko — GPL-3.0-only.
 // Tests for the batch-2 leaf components ported from the desktop chat.
-import 'package:baocode_mobile/chat/widgets/fade_curve.dart';
-import 'package:baocode_mobile/chat/widgets/flip_switcher.dart';
-import 'package:baocode_mobile/chat/widgets/shell_highlight.dart';
-import 'package:baocode_mobile/chat/widgets/shimmer_text.dart';
-import 'package:baocode_mobile/chat/widgets/thinking_spark.dart';
+import 'package:fromsko_mobile/chat/widgets/fade_curve.dart';
+import 'package:fromsko_mobile/chat/widgets/flip_switcher.dart';
+import 'package:fromsko_mobile/chat/widgets/shell_highlight.dart';
+import 'package:fromsko_mobile/chat/widgets/shimmer_text.dart';
+import 'package:fromsko_mobile/chat/widgets/thinking_spark.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 

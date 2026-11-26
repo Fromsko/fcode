@@ -1,4 +1,4 @@
-import 'package:baocode_mobile/link/link_store.dart';
+import 'package:fromsko_mobile/link/link_store.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -6,7 +6,7 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   test('platform store uses the native secure-storage contract', () async {
-    const channel = MethodChannel('local.baocode.mobile/platform');
+    const channel = MethodChannel('local.fromsko.mobile/platform');
     final calls = <MethodCall>[];
     final messenger =
         TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
@@ -32,7 +32,7 @@ void main() {
   test(
     'platform storage failures propagate rather than losing credentials',
     () async {
-      const channel = MethodChannel('local.baocode.mobile/platform');
+      const channel = MethodChannel('local.fromsko.mobile/platform');
       final messenger =
           TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
       messenger.setMockMethodCallHandler(channel, (_) async {

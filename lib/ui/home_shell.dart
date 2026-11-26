@@ -27,8 +27,12 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
   final _pages = PageController();
   late final _exit = BackToExit(widget.state);
   int _tab = 0;
-  late final _updates =
-      widget.updateChecker ?? AutoUpdateChecker(currentVersion: appVersion);
+  // 没注入 checker 时才用默认的联网检查；自动更新关闭时默认不检查。
+  late final AutoUpdateChecker? _updates =
+      widget.updateChecker ??
+      (fromskoUpdatesEnabled
+          ? AutoUpdateChecker(currentVersion: appVersion)
+          : null);
 
   @override
   void initState() {
@@ -59,7 +63,9 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
   /// （比如去系统设置允许安装后回来）不再弹第二个。
   Future<void> _checkForUpdates() async {
     if (UpdateDialog.isOpen) return;
-    final check = await _updates.check();
+    final updates = _updates;
+    if (updates == null) return;
+    final check = await updates.check();
     if (check == null || !mounted || UpdateDialog.isOpen) return;
     await showDialog<void>(
       context: context,

@@ -1,7 +1,7 @@
-// YCode — GPL-3.0-only.
+// Fromsko — GPL-3.0-only.
 import 'dart:io';
 
-import 'package:baocode_mobile/ui/settings/changelog_page.dart';
+import 'package:fromsko_mobile/ui/settings/changelog_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';

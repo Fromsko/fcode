@@ -1,8 +1,8 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:baocode_mobile/state/apk_download.dart';
-import 'package:baocode_mobile/state/update_check.dart';
+import 'package:fromsko_mobile/state/apk_download.dart';
+import 'package:fromsko_mobile/state/update_check.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -11,7 +11,7 @@ void main() {
 
   setUp(() async {
     server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
-    directory = await Directory.systemTemp.createTemp('ycode-update-test-');
+    directory = await Directory.systemTemp.createTemp('fromsko-update-test-');
   });
   tearDown(() async {
     await server.close(force: true);
@@ -23,8 +23,8 @@ void main() {
   );
 
   ReleaseApk asset(int size) => ReleaseApk(
-    name: 'ycode-0.3.0.apk',
-    url: Uri.parse('http://127.0.0.1:${server.port}/ycode.apk'),
+    name: 'fromsko-0.3.0.apk',
+    url: Uri.parse('http://127.0.0.1:${server.port}/fromsko.apk'),
     size: size,
   );
 
@@ -57,7 +57,7 @@ void main() {
         .list()
         .map((entry) => entry.uri.pathSegments.last)
         .toList();
-    expect(names, ['ycode-update.apk']);
+    expect(names, ['fromsko-update.apk']);
     expect(await file.readAsBytes(), [2, 2, 2, 2]);
   });
 
@@ -95,7 +95,7 @@ void main() {
     await expectLater(
       ApkDownloader().download(
         ReleaseApk(
-          name: 'ycode.apk',
+          name: 'fromsko.apk',
           url: asset(4).url,
           size: 4,
           sha256: '0' * 64,
@@ -114,8 +114,8 @@ void main() {
     await expectLater(
       ApkDownloader().download(
         ReleaseApk(
-          name: 'ycode.apk',
-          url: Uri.parse('http://127.0.0.1:$port/ycode.apk'),
+          name: 'fromsko.apk',
+          url: Uri.parse('http://127.0.0.1:$port/fromsko.apk'),
           size: 4,
         ),
         directory,

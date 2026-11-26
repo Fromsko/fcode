@@ -25,3 +25,6 @@ vendor/**/build/
 dist/
 *.idsig
 __pycache__/
+
+# 打包时临时改写，不入库
+android/app/src/main/java/io/flutter/plugins/GeneratedPluginRegistrant.java.tmp

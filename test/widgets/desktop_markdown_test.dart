@@ -1,7 +1,7 @@
-import 'package:baocode_mobile/chat/markdown/code_citation.dart';
-import 'package:baocode_mobile/chat/markdown/markdown_math.dart';
-import 'package:baocode_mobile/chat/markdown/markdown_tags.dart';
-import 'package:baocode_mobile/chat/markdown/markdown_view.dart';
+import 'package:fromsko_mobile/chat/markdown/code_citation.dart';
+import 'package:fromsko_mobile/chat/markdown/markdown_math.dart';
+import 'package:fromsko_mobile/chat/markdown/markdown_tags.dart';
+import 'package:fromsko_mobile/chat/markdown/markdown_view.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';

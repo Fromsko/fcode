@@ -7,15 +7,24 @@ import 'package:clock/clock.dart';
 import '../models/user_facing_error.dart';
 import 'app_state.dart';
 
-const projectUrl = 'https://github.com/shuishani/ycode';
+/// 自动更新是否启用。
+///
+/// 关闭的原因：本分叉的包名与签名都与上游不同，从上游 Releases 拉到的 APK
+/// 装不上。等本仓库开始发版后把它改成 true，下面的 URL 已经指向本仓库。
+const fromskoUpdatesEnabled = false;
 
-/// 最新版本从 GitHub Releases 取：YCode 只在那里发布。先读最新 Release 附带的
+/// 发布仓库。改这一处，解析、校验和请求都跟着变。
+const releaseRepo = 'Fromsko/fcode';
+
+const projectUrl = 'https://github.com/$releaseRepo';
+
+/// 最新版本从 GitHub Releases 取：Fromsko 只在那里发布。先读最新 Release 附带的
 /// `latest.json`（跳转到 CDN，不占匿名接口每个出口 IP 每小时 60 次的额度），
 /// 读不到再问 [updateReleaseApi]。
 const updateManifestUrl =
-    'https://github.com/shuishani/ycode/releases/latest/download/latest.json';
+    'https://github.com/$releaseRepo/releases/latest/download/latest.json';
 const updateReleaseApi =
-    'https://api.github.com/repos/shuishani/ycode/releases/latest';
+    'https://api.github.com/repos/$releaseRepo/releases/latest';
 
 class ReleaseApk {
   const ReleaseApk({
@@ -119,7 +128,7 @@ ReleaseInfo parseRelease(String body) {
       page.host != 'github.com' ||
       page.userInfo.isNotEmpty ||
       page.hasPort ||
-      !page.path.startsWith('/shuishani/ycode/releases/tag/')) {
+      !page.path.startsWith('/$releaseRepo/releases/tag/')) {
     throw const FormatException('release is unreadable');
   }
   final text = decoded['body'];
@@ -151,7 +160,7 @@ ReleaseApk? _releaseApk(Object? assets, String tag) {
       continue;
     }
     final lower = name.toLowerCase();
-    if (!RegExp(r'^ycode[-\w.]*\.apk$').hasMatch(lower) ||
+    if (!RegExp(r'^fromsko[-\w.]*\.apk$').hasMatch(lower) ||
         lower.contains('x86') ||
         lower.contains('armeabi') ||
         lower.contains('debug')) {
@@ -167,7 +176,7 @@ ReleaseApk? _releaseApk(Object? assets, String tag) {
         uri.hasFragment ||
         uri.pathSegments.length != 6 ||
         uri.pathSegments.take(5).join('/') !=
-            'shuishani/ycode/releases/download/$tag' ||
+            '$releaseRepo/releases/download/$tag' ||
         !uri.pathSegments.last.toLowerCase().endsWith('.apk')) {
       continue;
     }
@@ -198,7 +207,7 @@ Future<String> fetchLatestRelease(Uri url) async {
   final client = HttpClient()..connectionTimeout = updateCheckTimeout;
   try {
     final request = await client.getUrl(url).timeout(updateCheckTimeout);
-    request.headers.set(HttpHeaders.userAgentHeader, 'YCode-Android');
+    request.headers.set(HttpHeaders.userAgentHeader, 'Fromsko-Android');
     request.headers.set(
       HttpHeaders.acceptHeader,
       'application/vnd.github+json',

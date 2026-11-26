@@ -1,12 +1,12 @@
 import 'dart:convert';
 
 import 'package:bao_link/bao_link.dart';
-import 'package:baocode_mobile/chat/chat_models.dart';
-import 'package:baocode_mobile/chat/message_view.dart';
-import 'package:baocode_mobile/chat/widgets/image_deck.dart';
-import 'package:baocode_mobile/link/link_store.dart';
-import 'package:baocode_mobile/state/app_state.dart';
-import 'package:baocode_mobile/ui/tasks/chat_page.dart';
+import 'package:fromsko_mobile/chat/chat_models.dart';
+import 'package:fromsko_mobile/chat/message_view.dart';
+import 'package:fromsko_mobile/chat/widgets/image_deck.dart';
+import 'package:fromsko_mobile/link/link_store.dart';
+import 'package:fromsko_mobile/state/app_state.dart';
+import 'package:fromsko_mobile/ui/tasks/chat_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -193,7 +193,7 @@ void main() {
   });
 
   testWidgets('草稿里有附件时不显示推荐，点推荐不会带走附件', (tester) async {
-    const channel = MethodChannel('local.baocode.mobile/platform');
+    const channel = MethodChannel('local.fromsko.mobile/platform');
     final messenger =
         TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
     messenger.setMockMethodCallHandler(channel, (call) async {

@@ -1,4 +1,4 @@
-// YCode — GPL-3.0-only.
+// Fromsko — GPL-3.0-only.
 import 'package:bao_link/bao_link.dart';
 
 import '../../chat/chat_models.dart';

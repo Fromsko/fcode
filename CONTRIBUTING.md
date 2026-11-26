@@ -1,11 +1,11 @@
 # 参与贡献
 
-欢迎提交 Issue 和 Pull Request。YCode 是个人维护的非官方客户端，回复可能不及时，请见谅。
+欢迎提交 Issue 和 Pull Request。Fromsko 是个人维护的非官方客户端，回复可能不及时，请见谅。
 
 ## 报告问题
 
 - 先搜索是否已有相同的 Issue。
-- 写清手机型号和 Android 版本、YCode 版本（「设置 → 当前版本」）、电脑端 BaoCode 版本、复现步骤，以及实际和预期的结果。
+- 写清手机型号和 Android 版本、Fromsko 版本（「设置 → 当前版本」）、电脑端 BaoCode 版本、复现步骤，以及实际和预期的结果。
 - 截图和日志里先去掉配对二维码、配对链接、安全码、令牌、真实聊天内容和个人路径。
 - **安全问题不要公开提交**，按 [SECURITY.md](SECURITY.md) 私下报告。
 - BaoCode 电脑端本身的问题请提交给官方仓库 [baocode-dev/baocode](https://github.com/baocode-dev/baocode)。

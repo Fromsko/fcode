@@ -1,17 +1,17 @@
 import 'dart:async';
 
 import 'package:bao_link/bao_link.dart';
-import 'package:baocode_mobile/link/phone_link.dart';
-import 'package:baocode_mobile/state/app_state.dart';
-import 'package:baocode_mobile/theme/app_theme.dart';
-import 'package:baocode_mobile/ui/tasks/chat_page.dart';
-import 'package:baocode_mobile/ui/tasks/session_sync_notice.dart';
-import 'package:baocode_mobile/ui/widgets/mobile_widgets.dart';
-import 'package:baocode_mobile/ui/tasks/changes_page.dart';
+import 'package:fromsko_mobile/link/phone_link.dart';
+import 'package:fromsko_mobile/state/app_state.dart';
+import 'package:fromsko_mobile/theme/app_theme.dart';
+import 'package:fromsko_mobile/ui/tasks/chat_page.dart';
+import 'package:fromsko_mobile/ui/tasks/session_sync_notice.dart';
+import 'package:fromsko_mobile/ui/widgets/mobile_widgets.dart';
+import 'package:fromsko_mobile/ui/tasks/changes_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-import 'package:baocode_mobile/models/user_facing_error.dart';
+import 'package:fromsko_mobile/models/user_facing_error.dart';
 
 class _State extends AppState {
   _State() : super(store: MemoryLinkStore());

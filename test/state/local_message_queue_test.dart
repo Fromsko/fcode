@@ -2,9 +2,9 @@ import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:bao_link/bao_link.dart';
-import 'package:baocode_mobile/models/session_buffer.dart';
-import 'package:baocode_mobile/state/conversation_input.dart';
-import 'package:baocode_mobile/state/local_message_queue.dart';
+import 'package:fromsko_mobile/models/session_buffer.dart';
+import 'package:fromsko_mobile/state/conversation_input.dart';
+import 'package:fromsko_mobile/state/local_message_queue.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 class Sent {

@@ -1,73 +1,107 @@
-# YCode
+# Fromsko
 
 **English** · [简体中文](README_CN.md)
 
-[Download for Android](https://github.com/shuishani/ycode/releases/latest) · [Changelog](CHANGELOG.md) · [Issues](https://github.com/shuishani/ycode/issues)
+[Changelog](CHANGELOG.md) · [Releases](https://github.com/Fromsko/fcode/releases) · [Issues](https://github.com/Fromsko/fcode/issues)
 
-YCode is an independent, unofficial Android client for the BaoCode desktop app, maintained by shuishan and built with Flutter. It pairs with your computer over BaoCode's official link v2 protocol (iroh/QUIC, Ed25519, end-to-end encrypted), so you can follow and continue your desktop conversations from your phone.
+Fromsko puts your BaoCode desktop on your phone: follow a running task, answer the agent's
+questions, and pick up a conversation where the desktop left it. Pairing uses BaoCode's official
+link v2 protocol — iroh/QUIC with Ed25519 keys and end-to-end encryption — so conversations stay
+between your phone and your own computer.
 
-| Home | Conversation |
+It also ships **EasyTier mesh networking**, so a phone and a desktop on different networks can
+reach each other directly instead of going through a third-party relay.
+
+| Home | Mesh networking |
 | :---: | :---: |
-| ![Home](docs/screenshots/home.jpg) | ![Conversation](docs/screenshots/chat.jpg) |
-| **Switching the layout** | **Focus side panel** |
-| ![Settings → Layout](docs/screenshots/layout.jpg) | ![Focus side panel](docs/screenshots/focus.jpg) |
+| ![Home](docs/screenshots/home.png) | ![Mesh](docs/screenshots/mesh.png) |
 
-YCode is not an official BaoCode product and is not supported by the BaoCode team. Model calls, credentials and task execution stay on the desktop. Only connect to computers you trust.
+Fromsko is a fork of [YCode](https://github.com/shuishani/ycode) and is not an official BaoCode
+product. Model calls, credentials and task execution stay on the desktop. Only connect to
+computers you trust.
 
-## Install and update
+## Install
 
-- **Install BaoCode on your computer first**: website <https://baocode.dev>, download <https://baocode.dev/download>. In the desktop app, open Settings → Mobile to show a QR code, then scan it with YCode to pair.
-- **Install YCode**: download the APK from [GitHub Releases](https://github.com/shuishani/ycode/releases). It runs on arm64 devices with Android 7.0 or later. iOS is not supported yet.
-- **Updates**: YCode checks for updates every time it opens, offers new versions in a dialog, and downloads and installs them in the app. You can also check under Settings → Current version. The first update asks you to allow YCode to install unknown apps. Updating in place keeps your pairings and data; don't uninstall to update.
+1. **Install BaoCode on your computer** — <https://baocode.dev/download>. In the desktop app open
+   **Settings → Mobile** to show a pairing QR code.
+2. **Install Fromsko** — download the APK from
+   [Releases](https://github.com/Fromsko/fcode/releases). Android 7.0+ on arm64. No iOS build.
+3. **Pair** — scan the desktop's QR code, paste the address, or let local discovery find it.
 
-## Features
+## What it does
 
-- Two layouts, switched under Settings → Layout: "List" has Conversations, Bots, Files and Settings tabs; "Focus" opens straight into your last conversation, with projects and conversations in a side panel.
-- Chinese and English; follows the system theme or light/dark.
-- Pair by QR code, pasted link or LAN discovery; multiple computers; reconnects after drops; optionally keeps the connection in the background (experimental).
-- Search, pin and archive projects and conversations, and unfold a project's conversations right on the home list; streaming messages, queued and immediate sends, images and @ files, / commands.
-- Edit and resend an earlier message, optionally undoing the files the agent changed after it; a context usage ring in the composer (both need BaoCode desktop 1.9.3 or later).
-- Markdown, code highlighting, math and offline Mermaid; folded tools and thinking, approvals and questions, plans, subagents.
-- Switch models, modes and permissions with provider icons; quota checks need desktop support, and the official desktop shows them as unsupported.
-- Add, edit and chat with Bots, with avatars and memory.
-- File tree, search, preview and diffs, with keeping or undoing changes.
+- Two layouts: **List** (chats, bots, files, settings as four columns) and **Focus** (opens your
+  last conversation, everything else in a side panel).
+- Chinese and English, following the system or forced light/dark.
+- Pair by QR, pasted address or LAN discovery; multiple desktops, automatic reconnect; an
+  experimental keep-alive that holds the connection in the background.
+- Search, pin and archive projects and conversations; streaming messages, queuing and send-now,
+  images, `@` file references, `/` commands.
+- Edit an earlier message and resend; revert the files the agent changed after it; context usage
+  in the input bar (desktop 1.9.3+).
+- Markdown, syntax highlighting, math, offline Mermaid; collapsible tool calls and reasoning,
+  approvals, questions, plans, subagents.
+- Switch model, mode and permission level; vendor icons; quota display where the desktop
+  supports it.
+- Bots: create, edit, avatar, memory, chat.
+- File tree, search, preview, diff, and keep-or-revert.
+
+### Mesh networking
+
+Open **Settings → Mesh**. Give every device the same network name and secret, then connect. The
+app shows each peer's hostname, virtual IP, live round-trip time, whether the link is direct or
+relayed, and how much it has sent and received. Tap a peer to probe a TCP port.
+
+Peers default to **EasyTier's official public node** (`tcp://public.easytier.top:11010`). Under
+**Peer source** you can reset to the official node, or clear the list and enter your own seed or
+relay servers, one per line. Nothing in the app is tied to a particular private network.
 
 ## Development
 
-Requires Flutter 3.47 / Dart 3.13, JDK 21, the Android SDK/NDK and Rust 1.97.1 (pinned by `vendor/bao_iroh/rust/rust-toolchain.toml`). Only the Android project exists; there is no iOS project.
+Requires Flutter 3.47 / Dart 3.13, JDK 21, Android SDK and NDK, and Rust 1.97.1 (pinned by
+`vendor/bao_iroh/rust/rust-toolchain.toml`). Android only; there is no iOS project.
 
-Keep the Android SDK and Flutter paths in your local `android/local.properties`, which is not committed. On Windows you can use `tool/prepare_android.ps1`, or follow the [build guide](docs/release-android.md).
+Local SDK paths go in `android/local.properties`, which is not committed.
 
 ```sh
 flutter pub get
 flutter analyze --no-pub
-# Run the tests related to your change, for example:
-flutter test --no-pub test/state/update_check_test.dart test/state/apk_download_test.dart test/widgets/update_check_test.dart
-flutter run --dart-define=DEMO=true   # demo data, no desktop needed
+flutter test --no-pub
+flutter run --dart-define=DEMO=true   # demo data, does not connect to a desktop
 ```
 
-Packaging, signing, installing and releasing are described in [docs/release-android.md](docs/release-android.md) (Chinese). `tool/fixture_desktop.dart` is a synthetic desktop for tests that never touches real repositories or models.
+Building, signing and publishing are covered in [docs/release-android.md](docs/release-android.md).
+Pushing a `v*` tag runs [`.github/workflows/release.yml`](.github/workflows/release.yml), which
+builds, signs and publishes the APK together with the `latest.json` update manifest.
 
-## Origin and license
+## License and provenance
 
-Copyright (C) 2026 shuishan. The project as a whole is released under **GPL-3.0-only**; see [LICENSE](LICENSE).
+Fromsko is a derivative work of YCode. Upstream copyright (C) 2026 shuishan. This fork's changes
+are released under the same **GPL-3.0-only**; see [LICENSE](LICENSE), and [NOTICE](NOTICE) for the
+full list of changes against upstream.
 
-- The protocol package `vendor/bao_link` and the files copied or adapted from BaoCode are GPL-3.0-only, copyright the BaoCode authors. `vendor/bao_iroh` and `vendor/bao_editor` keep their MIT licenses and third-party licenses.
-- Icons come from Lucide, Remix Icon 4.8.0, theSVG, Simple Icons and Material Icon Theme; see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for the license texts and files. They are also listed in the app under Settings → About YCode → Open-source licenses.
-- The interface was designed and built independently from screenshots of the official BaoCode mobile app, and contains none of its code or image assets. The protocol's origin, our extension and the list of files from BaoCode are in [docs/upstream-sync.md](docs/upstream-sync.md).
-- The BaoCode name and logo, and the model providers' logos, belong to their respective owners.
+- `vendor/bao_link` and the files adapted from BaoCode are GPL-3.0-only, copyright the BaoCode
+  authors. `vendor/bao_iroh` and `vendor/bao_editor` keep their MIT licenses.
+- Icons come from Lucide, Remix Icon 4.8.0, theSVG, Simple Icons and Material Icon Theme; see
+  [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). The app lists all of these under
+  **Settings → About Fromsko → Open-source licenses**.
+- The interface was designed from screenshots of the official BaoCode app; it contains no code or
+  image assets from that app. See [docs/upstream-sync.md](docs/upstream-sync.md).
+- BaoCode's name and marks, and the model vendors' logos, belong to their respective owners.
 
 ## Contributing
 
-Issues and pull requests are welcome; see [CONTRIBUTING.md](CONTRIBUTING.md). Please report security issues privately as described in [SECURITY.md](SECURITY.md).
+Issues and pull requests are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md). Report security
+problems privately as described in [SECURITY.md](SECURITY.md).
 
-Never include model credentials, pairing details, real chat logs, signing keys or signing passwords in commits or public issues.
+Never attach model credentials, pairing data, real conversation logs, signing keys or key
+passwords to an issue or a pull request.
 
-## Buy me a coffee
+## Support
 
-If YCode is useful to you, you can buy the author a coffee.
+If Fromsko is useful to you, you can buy the maintainer a coffee.
 
 <p>
-  <img src="assets/donate/wechat.webp" alt="WeChat Pay" width="200">
+  <img src="assets/donate/wechat.webp" alt="WeChat" width="200">
   <img src="assets/donate/alipay.webp" alt="Alipay" width="200">
 </p>

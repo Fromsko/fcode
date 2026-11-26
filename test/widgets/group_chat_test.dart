@@ -1,11 +1,11 @@
 import 'dart:async';
 
 import 'package:bao_link/bao_link.dart';
-import 'package:baocode_mobile/chat/message_view.dart';
-import 'package:baocode_mobile/chat/widgets/image_deck.dart';
-import 'package:baocode_mobile/link/link_store.dart';
-import 'package:baocode_mobile/state/app_state.dart';
-import 'package:baocode_mobile/ui/bots/group_page.dart';
+import 'package:fromsko_mobile/chat/message_view.dart';
+import 'package:fromsko_mobile/chat/widgets/image_deck.dart';
+import 'package:fromsko_mobile/link/link_store.dart';
+import 'package:fromsko_mobile/state/app_state.dart';
+import 'package:fromsko_mobile/ui/bots/group_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 

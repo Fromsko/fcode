@@ -4,8 +4,8 @@ import 'dart:convert';
 import 'package:bao_link/bao_link.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:baocode_mobile/link/phone_link.dart';
-import 'package:baocode_mobile/models/user_facing_error.dart';
+import 'package:fromsko_mobile/link/phone_link.dart';
+import 'package:fromsko_mobile/models/user_facing_error.dart';
 
 class _Desktop {
   _Desktop([MemoryLinkNetwork? network])

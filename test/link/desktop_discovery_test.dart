@@ -1,4 +1,4 @@
-import 'package:baocode_mobile/link/desktop_discovery.dart';
+import 'package:fromsko_mobile/link/desktop_discovery.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -6,8 +6,8 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   final messenger =
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
-  const platform = MethodChannel('local.baocode.mobile/platform');
-  const events = MethodChannel('local.baocode.mobile/discovery');
+  const platform = MethodChannel('local.fromsko.mobile/platform');
+  const events = MethodChannel('local.fromsko.mobile/discovery');
   late List<String> calls;
 
   setUp(() {

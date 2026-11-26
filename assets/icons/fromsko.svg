@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="116" fill="#17191E"/>
+  <!-- F 字形：上横 + 竖笔 + 中横，圆头收尾 -->
+  <path d="M186 132 L346 132 M186 132 L186 390 M186 254 L312 254" fill="none" stroke="#07C160" stroke-width="60" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- 右下白色光标，保留原来的记忆点 -->
+  <rect x="330" y="352" width="84" height="28" rx="14" fill="#F5F5F2"/>
+</svg>

@@ -1,4 +1,4 @@
-// YCode — GPL-3.0-only.
+// Fromsko — GPL-3.0-only.
 import 'dart:convert';
 
 import 'package:bao_link/bao_link.dart';
@@ -111,7 +111,7 @@ void main() {
           {'bytes': base64Decode(png), 'type': 'image/png', 'name': 'new.png'},
         ],
       })!;
-      const channel = MethodChannel('local.baocode.mobile/platform');
+      const channel = MethodChannel('local.fromsko.mobile/platform');
       tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
         channel,
         (call) async => call.method == 'readChatClipboard'

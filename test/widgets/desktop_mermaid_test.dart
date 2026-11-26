@@ -1,5 +1,5 @@
-import 'package:baocode_mobile/chat/markdown/code_citation.dart';
-import 'package:baocode_mobile/chat/markdown/mermaid_code_block.dart';
+import 'package:fromsko_mobile/chat/markdown/code_citation.dart';
+import 'package:fromsko_mobile/chat/markdown/mermaid_code_block.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';

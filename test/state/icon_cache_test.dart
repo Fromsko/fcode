@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:baocode_mobile/state/icon_cache.dart';
+import 'package:fromsko_mobile/state/icon_cache.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 const _pngB64 =

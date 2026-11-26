@@ -1,4 +1,4 @@
-// YCode — GPL-3.0-only.
+// Fromsko — GPL-3.0-only.
 import 'chat_models.dart';
 import '../link/chat_codec.dart';
 import 'step_folds.dart';

@@ -225,7 +225,7 @@ class AppState extends ChangeNotifier {
   final _sessionStatuses = <(String, String), SessionSummary>{};
   late final DesktopNotifications notifications;
 
-  static const _platform = MethodChannel('local.baocode.mobile/platform');
+  static const _platform = MethodChannel('local.fromsko.mobile/platform');
 
   /// Asks the system, once, to let the app notify: a newly installed app may
   /// not, and the setting reads on all the same. Only with the app in front
@@ -1243,7 +1243,7 @@ class AppState extends ChangeNotifier {
   Future<void> haptic([String kind = 'tap']) async {
     if (!settings.haptics || demo) return;
     try {
-      await const MethodChannel('local.baocode.mobile/platform')
+      await const MethodChannel('local.fromsko.mobile/platform')
           .invokeMethod<void>('haptic', {'kind': kind});
     } on MissingPluginException {
       /* Widget tests have no platform host. */

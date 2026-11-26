@@ -2,16 +2,16 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:baocode_mobile/state/apk_download.dart';
-import 'package:baocode_mobile/state/update_check.dart';
+import 'package:fromsko_mobile/state/apk_download.dart';
+import 'package:fromsko_mobile/state/update_check.dart';
 import 'package:flutter/services.dart';
 
-import 'package:baocode_mobile/link/phone_link.dart';
-import 'package:baocode_mobile/state/app_state.dart';
-import 'package:baocode_mobile/theme/app_theme.dart';
-import 'package:baocode_mobile/ui/home_shell.dart';
-import 'package:baocode_mobile/ui/settings/settings_page.dart';
-import 'package:baocode_mobile/ui/widgets/mobile_widgets.dart';
+import 'package:fromsko_mobile/link/phone_link.dart';
+import 'package:fromsko_mobile/state/app_state.dart';
+import 'package:fromsko_mobile/theme/app_theme.dart';
+import 'package:fromsko_mobile/ui/home_shell.dart';
+import 'package:fromsko_mobile/ui/settings/settings_page.dart';
+import 'package:fromsko_mobile/ui/widgets/mobile_widgets.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -24,12 +24,12 @@ String releaseJson({
 }) => jsonEncode({
   'tag_name': tag,
   'body': notes,
-  'html_url': 'https://github.com/shuishani/ycode/releases/tag/$tag',
+  'html_url': 'https://github.com/Fromsko/fcode/releases/tag/$tag',
   'assets': [
     {
-      'name': 'ycode-0.3.0.apk',
+      'name': 'fromsko-0.3.0.apk',
       'browser_download_url':
-          'https://github.com/shuishani/ycode/releases/download/$tag/ycode-0.3.0.apk',
+          'https://github.com/Fromsko/fcode/releases/download/$tag/fromsko-0.3.0.apk',
       'size': 4,
     },
   ],
@@ -55,7 +55,7 @@ class CompletedDownloader extends ApkDownloader {
     void Function(int received)? onProgress,
   }) async {
     onProgress?.call(4);
-    return File('${directory.path}/ycode.apk');
+    return File('${directory.path}/fromsko.apk');
   }
 }
 
@@ -135,7 +135,7 @@ void main() {
                   release: const ReleaseInfo(
                     version: '0.3.0',
                     notes: '',
-                    url: 'https://github.com/shuishani/ycode/releases/tag/v0.3.0',
+                    url: 'https://github.com/Fromsko/fcode/releases/tag/v0.3.0',
                   ),
                 ),
               ),
@@ -155,8 +155,8 @@ void main() {
     final state = AppState(store: MemoryLinkStore());
     addTearDown(state.dispose);
     state.settings.language = 'zh';
-    final directory = Directory('/test/ycode');
-    const channel = MethodChannel('local.baocode.mobile/platform');
+    final directory = Directory('/test/fromsko');
+    const channel = MethodChannel('local.fromsko.mobile/platform');
     var installs = 0;
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, (call) async {
@@ -164,7 +164,7 @@ void main() {
           if (call.method == 'installUpdate') {
             expect(call.arguments['version'], '0.3.0');
             expect(call.arguments['size'], 4);
-            expect(call.arguments['path'], '/test/ycode/ycode.apk');
+            expect(call.arguments['path'], '/test/fromsko/fromsko.apk');
             return ++installs > 1;
           }
           throw MissingPluginException();
@@ -197,7 +197,7 @@ void main() {
     await tester.tap(find.text('下载并安装'));
     await tester.pumpAndSettle();
     expect(find.text('继续安装'), findsOneWidget);
-    expect(find.textContaining('允许 YCode 安装应用'), findsOneWidget);
+    expect(find.textContaining('允许 Fromsko 安装应用'), findsOneWidget);
     await tester.tap(find.text('继续安装'));
     await tester.pumpAndSettle();
     expect(installs, 2);
@@ -209,9 +209,9 @@ void main() {
     final state = AppState(store: MemoryLinkStore());
     addTearDown(state.dispose);
     state.settings.language = 'zh';
-    const channel = MethodChannel('local.baocode.mobile/platform');
+    const channel = MethodChannel('local.fromsko.mobile/platform');
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(channel, (call) async => '/test/ycode');
+        .setMockMethodCallHandler(channel, (call) async => '/test/fromsko');
     addTearDown(
       () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
           .setMockMethodCallHandler(channel, null),

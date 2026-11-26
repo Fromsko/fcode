@@ -1,15 +1,15 @@
-// YCode — GPL-3.0-only.
+// Fromsko — GPL-3.0-only.
 import 'dart:async';
 
 import 'package:bao_link/bao_link.dart';
-import 'package:baocode_mobile/chat/message_view.dart';
-import 'package:baocode_mobile/link/phone_link.dart' show DesktopLinkStatus;
-import 'package:baocode_mobile/ui/tasks/chat_page.dart';
+import 'package:fromsko_mobile/chat/message_view.dart';
+import 'package:fromsko_mobile/link/phone_link.dart' show DesktopLinkStatus;
+import 'package:fromsko_mobile/ui/tasks/chat_page.dart';
 import 'package:flutter/material.dart';
 
 import 'chat_test_state.dart';
 
-import 'package:baocode_mobile/models/user_facing_error.dart';
+import 'package:fromsko_mobile/models/user_facing_error.dart';
 
 /// 聊天页测试的状态：记下发出的请求，发送、停止可以挂起或失败。
 class ChatPageState extends ChatTestState {

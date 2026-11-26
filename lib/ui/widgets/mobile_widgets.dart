@@ -19,7 +19,7 @@ import '../../models/user_facing_error.dart';
 Future<void> saveImageToGallery(
   BuildContext context,
   Uint8List bytes, {
-  String album = 'YCode',
+  String album = 'Fromsko',
 }) async {
   var saved = true;
   try {

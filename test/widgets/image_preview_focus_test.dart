@@ -1,7 +1,7 @@
-import 'package:baocode_mobile/ui/widgets/mobile_widgets.dart';
-import 'package:baocode_mobile/chat/message_view.dart';
-import 'package:baocode_mobile/ui/tasks/chat_page.dart';
-import 'package:baocode_mobile/ui/widgets/image_gallery.dart';
+import 'package:fromsko_mobile/ui/widgets/mobile_widgets.dart';
+import 'package:fromsko_mobile/chat/message_view.dart';
+import 'package:fromsko_mobile/ui/tasks/chat_page.dart';
+import 'package:fromsko_mobile/ui/widgets/image_gallery.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 

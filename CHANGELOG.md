@@ -1,5 +1,39 @@
 # Changelog
 
+## 0.3.1
+
+### Improved
+
+- The mesh screen is rebuilt for phones: one status card at the top with the connection switch, this device's address and total traffic; peers as rows with name, latency and link type; the network form folds away once connected.
+- A peer's probe result now appears on its own row instead of at the bottom of the page.
+
+### Fixed
+
+- Phones that left the hostname blank all appeared as `localhost` on the other nodes. They now default to the device model plus a short suffix.
+- The mesh screen kept showing an old RPC error after a disconnect; only a real error is shown now.
+
+### Removed
+
+- README screenshots taken from someone else's desktop, and the screenshots of desktop-only layouts.
+
+## 0.3.0
+
+First release under the Fromsko name; forked from YCode 0.2.2.
+
+### Added
+
+- Mesh networking through EasyTier: peer list with virtual IP and live RTT, per-peer traffic counters, TCP reachability probing with an editable port, and persisted network settings.
+- Peer source switch in the mesh settings: use EasyTier's official public nodes, or clear them and enter your own seed/relay.
+
+### Changed
+
+- Renamed to Fromsko: app name, package name (`local.fromsko.mobile`), launcher icon and notification icon (letter F), and all in-app text.
+- Default mesh network no longer ships any private address or relay; the defaults are EasyTier's public node and a generic `10.126.126.1/24` virtual IP.
+
+### Removed
+
+- Automatic update checks. This fork's packages differ in name and signing from upstream, so upstream releases cannot install over them.
+
 ## 0.2.2
 
 Subagent message cards need a recent desktop version; older desktops show messages as before.
@@ -58,7 +92,7 @@ Subagent message cards need a recent desktop version; older desktops show messag
 Context usage and undoing file changes need BaoCode desktop 1.9.3 or later; with an older desktop they don't appear and everything else works as before.
 
 - New: a context usage ring in the composer, orange above 80%; tap it to see what each part takes and how much is left before auto-compact. With BaoCode desktop 1.9.4 or later it updates as the conversation goes; with 1.9.3, when you open the conversation.
-- New: when you edit an earlier message and send it again, YCode can undo the files the agent changed after it — asking, undoing or keeping as the desktop's "Edited Messages" setting says (Claude Code and BaoCode Agent).
+- New: when you edit an earlier message and send it again, Fromsko can undo the files the agent changed after it — asking, undoing or keeping as the desktop's "Edited Messages" setting says (Claude Code and BaoCode Agent).
 - New: an arrow on a project's row unfolds its conversations right on the home list, without opening the project.
 - Improved: picking a project in the filter closes the panel and lists that project's conversations directly; new conversations then start in it.
 - Improved: checking for updates reads a small file attached to the release first, so it no longer fails when many people share one network and GitHub's hourly limit runs out.
@@ -66,7 +100,7 @@ Context usage and undoing file changes need BaoCode desktop 1.9.3 or later; with
 
 ## 0.1.0
 
-The first open-source release of YCode, an unofficial Android client for the BaoCode desktop app.
+The first open-source release of Fromsko, an unofficial Android client for the BaoCode desktop app.
 
 - Pair with your computer by QR code, pasted link or LAN discovery, end-to-end encrypted over link v2.
 - Conversations, Bots, Files and Settings tabs; streaming messages, edit and resend, queued sends, images and @ files, / commands.

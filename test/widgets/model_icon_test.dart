@@ -1,6 +1,6 @@
 import 'dart:io';
 
-import 'package:baocode_mobile/ui/widgets/model_icon.dart';
+import 'package:fromsko_mobile/ui/widgets/model_icon.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_test/flutter_test.dart';

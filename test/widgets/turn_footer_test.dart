@@ -1,7 +1,7 @@
 import 'dart:io';
 
-import 'package:baocode_mobile/chat/chat_models.dart';
-import 'package:baocode_mobile/chat/widgets/turn_footer.dart';
+import 'package:fromsko_mobile/chat/chat_models.dart';
+import 'package:fromsko_mobile/chat/widgets/turn_footer.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';

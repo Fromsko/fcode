@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 打包 YCode 并覆盖安装到连着的手机（见 docs/release-android.md）。
+# 打包 Fromsko 并覆盖安装到连着的手机（见 docs/release-android.md）。
 #   tool/build_android.sh            打包、签名、安装
 #   tool/build_android.sh --no-install 只打包签名
 # 版本名和构建号取 pubspec.yaml（如 0.3.0+35）；构建号必须持续递增，
@@ -48,13 +48,13 @@ if [ -z "${JAVA_HOME:-}" ] && [ "$(uname -s)" = Darwin ]; then
   [ -z "$JAVA_HOME" ] || export JAVA_HOME
 fi
 
-# 正式签名：密钥和口令放在 ~/.android/ycode-release.properties，不入库也不打印。
-# 换配置路径用环境变量 YCODE_SIGNING。
-signing=${YCODE_SIGNING:-$HOME/.android/ycode-release.properties}
+# 正式签名：密钥和口令放在 ~/.android/fromsko-release.properties，不入库也不打印。
+# 换配置路径用环境变量 FROMSKO_SIGNING。
+signing=${FROMSKO_SIGNING:-$HOME/.android/fromsko-release.properties}
 # Git Bash 里写成 /c/... 的路径 apksigner(.bat) 不认，交给它之前转成 C:/...。
 to_native() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s' "$1"; fi; }
 if [ ! -f "$signing" ]; then
-  echo "找不到签名配置 $signing。请把 ycode-release.jks 和 ycode-release.properties 放到 ~/.android/，或用 YCODE_SIGNING 指向 .properties。" >&2
+  echo "找不到签名配置 $signing。请把 fromsko-release.jks 和 fromsko-release.properties 放到 ~/.android/，或用 FROMSKO_SIGNING 指向 .properties。" >&2
   exit 1
 fi
 config() { sed -n "s/^$1=//p" "$signing" | head -1 | tr -d '\r'; }
@@ -112,14 +112,14 @@ flutter build apk --release --no-pub \
   --dart-define=APP_VERSION="$version"
 
 "$BUILD_TOOLS/zipalign" -f -p 4 "$out/app-release.apk" "$out/app-aligned.apk"
-export YCODE_STORE_PASSWORD="$store_pass" YCODE_KEY_PASSWORD="$key_pass"
+export FROMSKO_STORE_PASSWORD="$store_pass" FROMSKO_KEY_PASSWORD="$key_pass"
 "$apksigner" sign --ks "$keystore" \
-  --ks-pass env:YCODE_STORE_PASSWORD --key-pass env:YCODE_KEY_PASSWORD \
+  --ks-pass env:FROMSKO_STORE_PASSWORD --key-pass env:FROMSKO_KEY_PASSWORD \
   --ks-key-alias "$key_alias" \
-  --out "$out/ycode-$name-$number.apk" "$out/app-aligned.apk"
-"$apksigner" verify "$out/ycode-$name-$number.apk"
-echo "打好了：$out/ycode-$name-$number.apk"
+  --out "$out/fromsko-$name-$number.apk" "$out/app-aligned.apk"
+"$apksigner" verify "$out/fromsko-$name-$number.apk"
+echo "打好了：$out/fromsko-$name-$number.apk"
 
 [ "${1:-}" = --no-install ] && exit 0
-adb install -r "$out/ycode-$name-$number.apk"
-adb shell dumpsys package local.ycode.mobile | grep -E 'versionName|lastUpdateTime'
+adb install -r "$out/fromsko-$name-$number.apk"
+adb shell dumpsys package local.fromsko.mobile | grep -E 'versionName|lastUpdateTime'

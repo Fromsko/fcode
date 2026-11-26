@@ -113,20 +113,20 @@ BackgroundSummary summarizeBackground({
 
   if (desktops.isEmpty) {
     return BackgroundSummary(
-      title: tr('YCode 后台连接', 'YCode background'),
+      title: tr('Fromsko 后台连接', 'Fromsko background'),
       body: tr('还没有配对电脑', 'No desktop paired yet'),
       shortText: tr('后台', 'Idle'),
     );
   }
   if (online.isEmpty) {
     return BackgroundSummary(
-      title: tr('YCode 后台连接', 'YCode background'),
+      title: tr('Fromsko 后台连接', 'Fromsko background'),
       body: tr('电脑离线，正在重连', 'Desktop offline, reconnecting'),
       shortText: tr('离线', 'Offline'),
     );
   }
   return BackgroundSummary(
-    title: tr('YCode 已连接', 'YCode connected'),
+    title: tr('Fromsko 已连接', 'Fromsko connected'),
     body: tr('没有在跑的对话', 'No conversation running'),
     shortText: tr('在线', 'Online'),
   );

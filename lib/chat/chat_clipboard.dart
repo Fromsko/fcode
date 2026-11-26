@@ -20,7 +20,7 @@ class ChatClipboardContent {
 }
 
 class ChatClipboard {
-  static const _channel = MethodChannel('local.baocode.mobile/platform');
+  static const _channel = MethodChannel('local.fromsko.mobile/platform');
   static const _codec = StandardMessageCodec();
   static const _maxBytes = 32 * 1024 * 1024;
 

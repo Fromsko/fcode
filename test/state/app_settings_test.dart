@@ -1,6 +1,6 @@
 import 'dart:convert';
 
-import 'package:baocode_mobile/models/app_settings.dart';
+import 'package:fromsko_mobile/models/app_settings.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 

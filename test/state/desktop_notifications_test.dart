@@ -1,5 +1,5 @@
 import 'package:bao_link/bao_link.dart';
-import 'package:baocode_mobile/state/desktop_notifications.dart';
+import 'package:fromsko_mobile/state/desktop_notifications.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 SessionSummary _s(LinkSessionStatus status, {bool unread = false}) =>

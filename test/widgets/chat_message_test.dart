@@ -1,15 +1,15 @@
-// YCode — GPL-3.0-only.
+// Fromsko — GPL-3.0-only.
 import 'dart:async';
 
 import 'package:bao_link/bao_link.dart';
-import 'package:baocode_mobile/chat/widgets/turn_footer.dart';
-import 'package:baocode_mobile/chat/markdown/code_citation.dart';
-import 'package:baocode_mobile/link/phone_link.dart' show DesktopLinkStatus;
-import 'package:baocode_mobile/ui/tasks/chat_empty_state.dart';
-import 'package:baocode_mobile/ui/widgets/lucide_icon.dart';
-import 'package:baocode_mobile/ui/tasks/interaction_panel.dart';
-import 'package:baocode_mobile/ui/tasks/model_settings_sheet.dart';
-import 'package:baocode_mobile/ui/tasks/task_page.dart';
+import 'package:fromsko_mobile/chat/widgets/turn_footer.dart';
+import 'package:fromsko_mobile/chat/markdown/code_citation.dart';
+import 'package:fromsko_mobile/link/phone_link.dart' show DesktopLinkStatus;
+import 'package:fromsko_mobile/ui/tasks/chat_empty_state.dart';
+import 'package:fromsko_mobile/ui/widgets/lucide_icon.dart';
+import 'package:fromsko_mobile/ui/tasks/interaction_panel.dart';
+import 'package:fromsko_mobile/ui/tasks/model_settings_sheet.dart';
+import 'package:fromsko_mobile/ui/tasks/task_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 

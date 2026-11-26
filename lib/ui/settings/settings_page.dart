@@ -20,6 +20,7 @@ import '../widgets/scale_slider.dart';
 import '../widgets/top_hint.dart';
 import '../user_message.dart';
 import 'changelog_page.dart';
+import 'mesh_page.dart';
 import 'update_dialog.dart';
 
 export 'update_dialog.dart' show UpdateDialog;
@@ -82,6 +83,12 @@ class SettingsPage extends StatelessWidget {
                   '$online/${state.desktops.length} online',
                 ),
                 onTap: () => openPage<void>(context, DevicesPage(state: state)),
+              ),
+              SettingsRow(
+                state.tr('组网', 'Mesh'),
+                icon: 'route',
+                value: state.tr('EasyTier', 'EasyTier'),
+                onTap: () => openPage<void>(context, MeshPage(state: state)),
               ),
               SettingsRow(
                 state.tr('配对新电脑', 'Pair a desktop'),
@@ -176,7 +183,7 @@ class SettingsPage extends StatelessWidget {
           GroupCard(
             children: [
               SettingsRow(
-                state.tr('关于 YCode', 'About YCode'),
+                state.tr('关于 Fromsko', 'About Fromsko'),
                 icon: 'info',
                 value: appVersion,
                 onTap: () => openPage<void>(
@@ -611,7 +618,7 @@ class NotificationsPage extends StatefulWidget {
 
 class _NotificationsPageState extends State<NotificationsPage>
     with WidgetsBindingObserver {
-  static const _platform = MethodChannel('local.baocode.mobile/platform');
+  static const _platform = MethodChannel('local.fromsko.mobile/platform');
   bool? _permission;
   bool _battery = true;
 
@@ -725,8 +732,8 @@ class _NotificationsPageState extends State<NotificationsPage>
                   title: Text(state.tr('允许后台运行', 'Allow background activity')),
                   subtitle: Text(
                     state.tr(
-                      '系统仍在限制 YCode 后台运行，锁屏后可能断开。部分手机还需在应用设置中允许自启动。',
-                      'The system still limits YCode in the background and may disconnect it when locked. Some phones also need auto-start allowed in app settings.',
+                      '系统仍在限制 Fromsko 后台运行，锁屏后可能断开。部分手机还需在应用设置中允许自启动。',
+                      'The system still limits Fromsko in the background and may disconnect it when locked. Some phones also need auto-start allowed in app settings.',
                     ),
                   ),
                   trailing: TextButton(
@@ -796,8 +803,8 @@ class _NotificationsPageState extends State<NotificationsPage>
                     ),
                     title: Text(
                       state.tr(
-                        '系统已关闭 YCode 的通知',
-                        'The system blocks YCode notifications',
+                        '系统已关闭 Fromsko 的通知',
+                        'The system blocks Fromsko notifications',
                       ),
                     ),
                     trailing: TextButton(
@@ -1451,7 +1458,7 @@ class AboutPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Scaffold(
-      appBar: AppBar(title: Text(state.tr('关于 YCode', 'About YCode'))),
+      appBar: AppBar(title: Text(state.tr('关于 Fromsko', 'About Fromsko'))),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(
           MobileSpace.lg,
@@ -1464,7 +1471,7 @@ class AboutPage extends StatelessWidget {
             child: ClipRRect(
               borderRadius: BorderRadius.circular(22),
               child: SvgPicture.asset(
-                'assets/icons/ycode.svg',
+                'assets/icons/fromsko.svg',
                 width: 96,
                 height: 96,
               ),
@@ -1472,7 +1479,7 @@ class AboutPage extends StatelessWidget {
           ),
           const SizedBox(height: MobileSpace.lg),
           Text(
-            'YCode',
+            'Fromsko',
             textAlign: TextAlign.center,
             style: theme.textTheme.headlineSmall?.copyWith(
               fontWeight: FontWeight.w700,
@@ -1513,7 +1520,7 @@ class AboutPage extends StatelessWidget {
                 state.tr('开源许可', 'Open-source licenses'),
                 onTap: () => showLicensePage(
                   context: context,
-                  applicationName: 'YCode',
+                  applicationName: 'Fromsko',
                   applicationVersion: appVersion,
                 ),
               ),
@@ -1521,7 +1528,7 @@ class AboutPage extends StatelessWidget {
           ),
           const SizedBox(height: MobileSpace.xl),
           Text(
-            '© ${DateTime.now().year} YCode',
+            '© ${DateTime.now().year} Fromsko',
             textAlign: TextAlign.center,
             style: MobileTheme.hintStyleOf(context),
           ),

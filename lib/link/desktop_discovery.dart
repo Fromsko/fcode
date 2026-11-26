@@ -7,13 +7,13 @@ import 'package:flutter/services.dart';
 /// Native DNS-SD adapter. Advertisements are hints, never trust decisions.
 ///
 /// The native platform browses `_baocode._tcp` on discoveryStart and stops on
-/// discoveryStop, using local.baocode.mobile/platform. Events on
-/// local.baocode.mobile/discovery are resolved records
+/// discoveryStop, using local.fromsko.mobile/platform. Events on
+/// local.fromsko.mobile/discovery are resolved records
 /// {name, port, attributes: {v, k, p}, addresses: [host, ...]}, or {lost: id}.
 /// Errors are exposed, including missing platform implementations.
 class DesktopDiscovery extends ChangeNotifier {
-  static const _platform = MethodChannel('local.baocode.mobile/platform');
-  static const _channel = EventChannel('local.baocode.mobile/discovery');
+  static const _platform = MethodChannel('local.fromsko.mobile/platform');
+  static const _channel = EventChannel('local.fromsko.mobile/discovery');
   final _nearby = <String, LinkAdvert>{};
   StreamSubscription<dynamic>? _subscription;
   bool _disposed = false;

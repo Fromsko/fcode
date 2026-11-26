@@ -1,5 +1,5 @@
 import 'package:bao_link/bao_link.dart' show LinkSessionStatus;
-import 'package:baocode_mobile/state/background_summary.dart';
+import 'package:fromsko_mobile/state/background_summary.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 String zh(String zh, String en) => zh;
@@ -116,7 +116,7 @@ void main() {
         conversations: [session('a')],
         tr: zh,
       );
-      expect(summary.title, 'YCode 已连接');
+      expect(summary.title, 'Fromsko 已连接');
       expect(summary.body, '没有在跑的对话');
       expect(summary.shortText, '在线');
       expect(summary.target, isNull);
@@ -130,7 +130,7 @@ void main() {
         ],
         tr: zh,
       );
-      expect(summary.title, 'YCode 后台连接');
+      expect(summary.title, 'Fromsko 后台连接');
       expect(summary.body, '电脑离线，正在重连');
       expect(summary.shortText, '离线');
       expect(summary.target, isNull);

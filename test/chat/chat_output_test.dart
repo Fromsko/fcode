@@ -1,8 +1,8 @@
-// YCode — GPL-3.0-only.
-import 'package:baocode_mobile/chat/chat_models.dart';
-import 'package:baocode_mobile/chat/chat_output.dart';
-import 'package:baocode_mobile/chat/step_folds.dart';
-import 'package:baocode_mobile/chat/widgets/fold_line.dart';
+// Fromsko — GPL-3.0-only.
+import 'package:fromsko_mobile/chat/chat_models.dart';
+import 'package:fromsko_mobile/chat/chat_output.dart';
+import 'package:fromsko_mobile/chat/step_folds.dart';
+import 'package:fromsko_mobile/chat/widgets/fold_line.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 

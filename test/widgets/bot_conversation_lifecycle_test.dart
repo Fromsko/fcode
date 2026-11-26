@@ -1,14 +1,14 @@
 import 'dart:async';
 
 import 'package:bao_link/bao_link.dart';
-import 'package:baocode_mobile/chat/chat_models.dart';
-import 'package:baocode_mobile/chat/chat_output.dart';
-import 'package:baocode_mobile/chat/widgets/pixel_loader.dart';
-import 'package:baocode_mobile/link/link_store.dart';
-import 'package:baocode_mobile/state/app_state.dart';
-import 'package:baocode_mobile/ui/tasks/bot_working_line.dart';
-import 'package:baocode_mobile/ui/tasks/chat_composer_action.dart';
-import 'package:baocode_mobile/ui/tasks/chat_page.dart';
+import 'package:fromsko_mobile/chat/chat_models.dart';
+import 'package:fromsko_mobile/chat/chat_output.dart';
+import 'package:fromsko_mobile/chat/widgets/pixel_loader.dart';
+import 'package:fromsko_mobile/link/link_store.dart';
+import 'package:fromsko_mobile/state/app_state.dart';
+import 'package:fromsko_mobile/ui/tasks/bot_working_line.dart';
+import 'package:fromsko_mobile/ui/tasks/chat_composer_action.dart';
+import 'package:fromsko_mobile/ui/tasks/chat_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 

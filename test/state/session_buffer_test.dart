@@ -1,5 +1,5 @@
 import 'package:bao_link/bao_link.dart';
-import 'package:baocode_mobile/models/session_buffer.dart';
+import 'package:fromsko_mobile/models/session_buffer.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 LinkSessionUpdate delta(

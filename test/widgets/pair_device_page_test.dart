@@ -1,12 +1,12 @@
-import 'package:baocode_mobile/link/link_store.dart';
+import 'package:fromsko_mobile/link/link_store.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
-import 'package:baocode_mobile/state/app_state.dart';
-import 'package:baocode_mobile/ui/devices/devices_page.dart';
-import 'package:baocode_mobile/ui/devices/qr_scan_view.dart';
-import 'package:baocode_mobile/theme/app_theme.dart';
+import 'package:fromsko_mobile/state/app_state.dart';
+import 'package:fromsko_mobile/ui/devices/devices_page.dart';
+import 'package:fromsko_mobile/ui/devices/qr_scan_view.dart';
+import 'package:fromsko_mobile/theme/app_theme.dart';
 
 void main() {
   testWidgets('配对页：三步说明、粘贴模式与安全说明', (tester) async {

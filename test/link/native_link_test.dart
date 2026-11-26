@@ -1,5 +1,5 @@
 import 'package:bao_link/bao_link_io.dart';
-import 'package:baocode_mobile/link/phone_link.dart';
+import 'package:fromsko_mobile/link/phone_link.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../../tool/fixture_desktop.dart';

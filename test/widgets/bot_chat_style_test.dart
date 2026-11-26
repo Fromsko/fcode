@@ -1,16 +1,16 @@
 import 'dart:convert';
 
 import 'package:bao_link/bao_link.dart';
-import 'package:baocode_mobile/chat/chat_models.dart';
-import 'package:baocode_mobile/chat/chat_output.dart';
-import 'package:baocode_mobile/chat/message_view.dart';
-import 'package:baocode_mobile/chat/widgets/turn_footer.dart';
-import 'package:baocode_mobile/link/link_store.dart';
-import 'package:baocode_mobile/state/app_state.dart';
-import 'package:baocode_mobile/theme/app_theme.dart';
-import 'package:baocode_mobile/ui/tasks/chat_page.dart';
-import 'package:baocode_mobile/ui/widgets/formats.dart';
-import 'package:baocode_mobile/ui/widgets/image_gallery.dart';
+import 'package:fromsko_mobile/chat/chat_models.dart';
+import 'package:fromsko_mobile/chat/chat_output.dart';
+import 'package:fromsko_mobile/chat/message_view.dart';
+import 'package:fromsko_mobile/chat/widgets/turn_footer.dart';
+import 'package:fromsko_mobile/link/link_store.dart';
+import 'package:fromsko_mobile/state/app_state.dart';
+import 'package:fromsko_mobile/theme/app_theme.dart';
+import 'package:fromsko_mobile/ui/tasks/chat_page.dart';
+import 'package:fromsko_mobile/ui/widgets/formats.dart';
+import 'package:fromsko_mobile/ui/widgets/image_gallery.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 

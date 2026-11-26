@@ -1,7 +1,7 @@
 import 'dart:async';
 
-import 'package:baocode_mobile/models/user_facing_error.dart';
-import 'package:baocode_mobile/ui/tasks/chat_page.dart';
+import 'package:fromsko_mobile/models/user_facing_error.dart';
+import 'package:fromsko_mobile/ui/tasks/chat_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 

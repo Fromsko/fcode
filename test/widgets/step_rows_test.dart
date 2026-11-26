@@ -1,18 +1,18 @@
-// YCode — GPL-3.0-only.
+// Fromsko — GPL-3.0-only.
 // Tests for the batch-2 step rows ported from the desktop chat, and the
 // dispatcher's plain-text/isStep/defaultExpanded logic.
-import 'package:baocode_mobile/chat/chat_models.dart';
+import 'package:fromsko_mobile/chat/chat_models.dart';
 import 'package:bao_link/bao_link.dart';
-import 'package:baocode_mobile/chat/message_view.dart';
-import 'package:baocode_mobile/chat/widgets/chat_item_view.dart';
-import 'package:baocode_mobile/chat/widgets/command_step.dart';
-import 'package:baocode_mobile/chat/widgets/agent_step.dart';
-import 'package:baocode_mobile/chat/widgets/edit_step.dart';
-import 'package:baocode_mobile/chat/widgets/plan_card.dart';
-import 'package:baocode_mobile/chat/widgets/notice_row.dart';
-import 'package:baocode_mobile/chat/widgets/terminal_text.dart';
-import 'package:baocode_mobile/chat/widgets/live_selectable_text.dart';
-import 'package:baocode_mobile/chat/widgets/tool_call_row.dart';
+import 'package:fromsko_mobile/chat/message_view.dart';
+import 'package:fromsko_mobile/chat/widgets/chat_item_view.dart';
+import 'package:fromsko_mobile/chat/widgets/command_step.dart';
+import 'package:fromsko_mobile/chat/widgets/agent_step.dart';
+import 'package:fromsko_mobile/chat/widgets/edit_step.dart';
+import 'package:fromsko_mobile/chat/widgets/plan_card.dart';
+import 'package:fromsko_mobile/chat/widgets/notice_row.dart';
+import 'package:fromsko_mobile/chat/widgets/terminal_text.dart';
+import 'package:fromsko_mobile/chat/widgets/live_selectable_text.dart';
+import 'package:fromsko_mobile/chat/widgets/tool_call_row.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 

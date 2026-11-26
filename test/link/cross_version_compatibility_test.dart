@@ -1,9 +1,9 @@
 import 'dart:async';
 
 import 'package:bao_link/bao_link.dart';
-import 'package:baocode_mobile/link/phone_link.dart';
-import 'package:baocode_mobile/state/app_state.dart';
-import 'package:baocode_mobile/ui/tasks/quota_panel.dart';
+import 'package:fromsko_mobile/link/phone_link.dart';
+import 'package:fromsko_mobile/state/app_state.dart';
+import 'package:fromsko_mobile/ui/tasks/quota_panel.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 /// 只使用合成数据与内存网络的电脑端：按构造参数模拟旧 v2、纯官方和个人定制三种宿主。

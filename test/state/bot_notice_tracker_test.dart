@@ -1,5 +1,5 @@
 import 'package:bao_link/bao_link.dart';
-import 'package:baocode_mobile/state/bot_notice_tracker.dart';
+import 'package:fromsko_mobile/state/bot_notice_tracker.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 LinkBotNotice notice(int id, {String kind = 'done'}) => LinkBotNotice(

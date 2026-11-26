@@ -4,7 +4,7 @@ import 'dart:convert';
 import 'package:bao_link/bao_link.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:baocode_mobile/link/phone_link.dart';
+import 'package:fromsko_mobile/link/phone_link.dart';
 
 void main() {
   test('旧身份生成新密钥但保留电脑记录，重新确认前不拨号', () async {

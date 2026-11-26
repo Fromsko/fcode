@@ -315,7 +315,7 @@ class _NoConversation extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     SvgPicture.asset(
-                      'assets/icons/ycode.svg',
+                      'assets/icons/fromsko.svg',
                       width: 48,
                       height: 48,
                     ),
@@ -443,13 +443,13 @@ class _SidePanel extends StatelessWidget {
                   child: Row(
                     children: [
                       SvgPicture.asset(
-                        'assets/icons/ycode.svg',
+                        'assets/icons/fromsko.svg',
                         width: 26,
                         height: 26,
                       ),
                       const SizedBox(width: MobileSpace.sm),
                       const Text(
-                        'YCode',
+                        'Fromsko',
                         style: TextStyle(
                           fontSize: MobileType.headline,
                           fontWeight: FontWeight.w700,

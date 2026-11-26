@@ -83,8 +83,8 @@ class _UpdateDialogState extends State<UpdateDialog> {
                 'The system installer is open. Follow its instructions to finish.',
               )
             : state.tr(
-                '请允许 YCode 安装应用，返回后点击「继续安装」。',
-                'Allow YCode to install apps, then return and tap Continue installation.',
+                '请允许 Fromsko 安装应用，返回后点击「继续安装」。',
+                'Allow Fromsko to install apps, then return and tap Continue installation.',
               );
       });
     } on ApkDownloadCancelled {

@@ -1,8 +1,8 @@
 import 'dart:convert';
 
-import 'package:baocode_mobile/chat/chat_models.dart';
-import 'package:baocode_mobile/chat/chat_output.dart';
-import 'package:baocode_mobile/link/chat_codec.dart';
+import 'package:fromsko_mobile/chat/chat_models.dart';
+import 'package:fromsko_mobile/chat/chat_output.dart';
+import 'package:fromsko_mobile/link/chat_codec.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 Map<String, Object?> user(String text) => {'t': 'user', 'text': text};

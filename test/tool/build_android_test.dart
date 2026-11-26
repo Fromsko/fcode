@@ -5,7 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   test('构建号取显式版本且无论成败保留插件注册文件', () async {
     final directory = await Directory.systemTemp.createTemp(
-      'ycode-build-test-',
+      'fromsko-build-test-',
     );
     addTearDown(() => directory.delete(recursive: true));
     Future<void> write(

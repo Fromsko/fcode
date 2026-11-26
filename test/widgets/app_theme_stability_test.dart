@@ -1,6 +1,6 @@
-import 'package:baocode_mobile/link/link_store.dart';
-import 'package:baocode_mobile/main.dart';
-import 'package:baocode_mobile/state/app_state.dart';
+import 'package:fromsko_mobile/link/link_store.dart';
+import 'package:fromsko_mobile/main.dart';
+import 'package:fromsko_mobile/state/app_state.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 

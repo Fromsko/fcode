@@ -2,9 +2,9 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:bao_link/bao_link.dart';
-import 'package:baocode_mobile/link/phone_link.dart';
-import 'package:baocode_mobile/state/app_state.dart';
-import 'package:baocode_mobile/state/group_subscriptions.dart';
+import 'package:fromsko_mobile/link/phone_link.dart';
+import 'package:fromsko_mobile/state/app_state.dart';
+import 'package:fromsko_mobile/state/group_subscriptions.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -93,8 +93,8 @@ void main() {
   final messenger =
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
   const channels = [
-    MethodChannel('local.baocode.mobile/platform'),
-    MethodChannel('local.baocode.mobile/discovery'),
+    MethodChannel('local.fromsko.mobile/platform'),
+    MethodChannel('local.fromsko.mobile/discovery'),
   ];
   setUp(() {
     for (final channel in channels) {

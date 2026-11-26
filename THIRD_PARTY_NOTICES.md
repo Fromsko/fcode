@@ -1,6 +1,6 @@
 # 第三方组件与许可
 
-YCode 整体按 [GPL-3.0-only](LICENSE) 发布。下面这些部分来自第三方，保留各自的版权与许可；应用内「设置 → 关于 YCode → 开源许可」也会列出随安装包分发的许可全文。第三方 Dart 包（`pubspec.lock` 中的依赖）的许可由 Flutter 自动收集并显示在同一页面。
+Fromsko 整体按 [GPL-3.0-only](LICENSE) 发布。下面这些部分来自第三方，保留各自的版权与许可；应用内「设置 → 关于 Fromsko → 开源许可」也会列出随安装包分发的许可全文。第三方 Dart 包（`pubspec.lock` 中的依赖）的许可由 Flutter 自动收集并显示在同一页面。
 
 ## 代码
 
@@ -19,7 +19,7 @@ YCode 整体按 [GPL-3.0-only](LICENSE) 发布。下面这些部分来自第三�
 | `assets/model_icons/` 中标注 theSVG 的文件 | [theSVG](https://github.com/glincker/thesvg) | MIT | [assets/licenses/thesvg.txt](assets/licenses/thesvg.txt) |
 | `assets/model_icons/` 中标注 Simple Icons 的文件 | [Simple Icons](https://github.com/simple-icons/simple-icons) | CC0-1.0 | 无需附带 |
 | `assets/material_icons/` | [Material Icon Theme](https://github.com/material-extensions/vscode-material-icon-theme) | MIT | [assets/material_icons/LICENSE](assets/material_icons/LICENSE) |
-| `assets/icons/ycode.svg`、Android 应用图标 | YCode 自有 | GPL-3.0-only | — |
+| `assets/icons/fromsko.svg`、Android 应用图标 | Fromsko 自有 | GPL-3.0-only | — |
 
 每个图标文件开头的注释记录了它的具体来源与许可。
 
@@ -27,4 +27,4 @@ YCode 整体按 [GPL-3.0-only](LICENSE) 发布。下面这些部分来自第三�
 
 ## 商标
 
-`assets/model_icons/` 中的厂商标志仅用于标明对应的模型服务商，相关商标归各自所有者，不代表这些厂商认可或赞助本项目。BaoCode 名称与标识归其权利人所有；YCode 是独立的非官方客户端。
+`assets/model_icons/` 中的厂商标志仅用于标明对应的模型服务商，相关商标归各自所有者，不代表这些厂商认可或赞助本项目。BaoCode 名称与标识归其权利人所有；Fromsko 是独立的非官方客户端。

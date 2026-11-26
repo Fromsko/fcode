@@ -2,12 +2,12 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:bao_link/bao_link.dart';
-import 'package:baocode_mobile/chat/message_view.dart';
-import 'package:baocode_mobile/state/conversation_input.dart';
-import 'package:baocode_mobile/state/app_state.dart' show BotRef;
-import 'package:baocode_mobile/state/upload_file.dart';
-import 'package:baocode_mobile/ui/tasks/chat_composer_action.dart';
-import 'package:baocode_mobile/ui/tasks/chat_page.dart';
+import 'package:fromsko_mobile/chat/message_view.dart';
+import 'package:fromsko_mobile/state/conversation_input.dart';
+import 'package:fromsko_mobile/state/app_state.dart' show BotRef;
+import 'package:fromsko_mobile/state/upload_file.dart';
+import 'package:fromsko_mobile/ui/tasks/chat_composer_action.dart';
+import 'package:fromsko_mobile/ui/tasks/chat_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -15,7 +15,7 @@ import 'package:flutter_test/flutter_test.dart';
 import '../support/chat_page_harness.dart';
 
 const _path = '/srv/合成上传/合成 文档.pdf';
-const _channel = MethodChannel('local.baocode.mobile/platform');
+const _channel = MethodChannel('local.fromsko.mobile/platform');
 final _png = base64Decode(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII=',
 );

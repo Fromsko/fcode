@@ -1,6 +1,6 @@
 # 构建、签名与发布（Android）
 
-应用名 **YCode**，包名 `local.ycode.mobile`。正式版仅发布 arm64 APK。升级必须保持同一包名和正式签名，并使用更高的 Android 构建号，才能覆盖安装、保留配对和聊天记录。
+应用名 **Fromsko**，包名 `local.fromsko.mobile`。正式版仅发布 arm64 APK。升级必须保持同一包名和正式签名，并使用更高的 Android 构建号，才能覆盖安装、保留配对和聊天记录。
 
 ## 本地环境
 
@@ -17,9 +17,9 @@ Windows 可以使用 `tool/prepare_android.ps1 -FlutterSdk <路径> -AndroidSdk 
 
 ## 正式签名：Mac 与 Windows 共用同一把密钥
 
-密钥放在 `~/.android/ycode-release.jks`，配置放在同目录的 `ycode-release.properties`。Windows 的 `~` 是当前用户主目录；Git Bash 和 macOS 都使用同样的文件名和相对路径。
+密钥放在 `~/.android/fromsko-release.jks`，配置放在同目录的 `fromsko-release.properties`。Windows 的 `~` 是当前用户主目录；Git Bash 和 macOS 都使用同样的文件名和相对路径。
 
-配置包含 `storeFile`、`storePassword`、`keyAlias`、`keyPassword` 四项。`storeFile` 写 `ycode-release.jks`，相对配置所在目录解析，换电脑不用改。配置放在其他位置时，用 `YCODE_SIGNING` 指定完整路径。
+配置包含 `storeFile`、`storePassword`、`keyAlias`、`keyPassword` 四项。`storeFile` 写 `fromsko-release.jks`，相对配置所在目录解析，换电脑不用改。配置放在其他位置时，用 `FROMSKO_SIGNING` 指定完整路径。
 
 **换电脑要安全地转移原有文件，不要重新生成密钥。** macOS 对两个文件执行 `chmod 600`。脚本不会输出口令，apksigner 通过环境变量读取口令，避免写入命令行参数。
 
@@ -45,29 +45,56 @@ tool/build_android.sh              # 另用 adb install -r 覆盖安装
 
 1. 备份 `GeneratedPluginRegistrant.java` 当前内容，暂时移除 `integration_test` 注册。成功或失败后都恢复原样，不用 Git 覆盖已有本地修改。
 2. 以 release 模式仅构建 arm64，从 `pubspec.yaml` 读取版本和构建号。
-3. 用 Android build-tools 对齐、正式签名并校验，生成 `build/app/outputs/flutter-apk/ycode-<版本名>-<构建号>.apk`。
+3. 用 Android build-tools 对齐、正式签名并校验，生成 `build/app/outputs/flutter-apk/fromsko-<版本名>-<构建号>.apk`。
 4. 仅在未指定 `--no-install` 时执行 `adb install -r`，并打印设备上的版本信息。
 
 build-tools 从 `ANDROID_HOME` / `ANDROID_SDK_ROOT` 或系统标准目录查找，也可以通过 `BUILD_TOOLS` 指向具体版本目录。签名配置缺失或不完整会报错退出，绝不回退到 debug 签名。
 
 ## 发布与检查更新
 
-发布到 `https://github.com/shuishani/ycode` 的 GitHub Releases：
+发布由 [`.github/workflows/release.yml`](../.github/workflows/release.yml) 自动完成：
+推一个 `v*` 标签，CI 构建、签名、生成 `latest.json` 并发布 Release。
 
-1. 提升版本名和构建号，在 `CHANGELOG.md`（英文）和 `CHANGELOG_CN.md`（中文）顶部写上这一版（应用内「关于 YCode → 更新日志」按界面语言显示，测试会检查两份都有这一节），运行相关测试、静态检查并打包。
-2. 确认 APK 的包名、版本、构建号和签名与预期一致。
-3. 为对应源码提交创建稳定版本标签，如 `v0.1.0`。
-4. 上传正式签名的 `ycode-0.1.0-1.apk`（也接受 `ycode-0.1.0.apk`），不要上传 debug 或其他架构文件冒充正式包。再运行 `dart run tool/release_manifest.dart`，把生成的 `build/app/outputs/flutter-apk/latest.json` 一起上传；它按 pubspec 的版本、这个 APK 和两份更新日志生成，不要手改。Release 的说明直接用它的 `body`（`jq -r .body latest.json`）：英文在前，`<!-- zh -->` 一行之后是中文，应用按界面语言只显示一半；不另写 APK 名和 SHA，GitHub 的附件列表自带。
-5. 上传完成后再公开发布 Release，避免用户看到只有说明、没有 APK 的版本。公开仓库和公开的非预发布 Release 才能供应用匿名查询。
-6. 用较低版本实际检查更新，确认下载进度、取消、安装来源授权和系统安装器；完成覆盖安装后确认版本、配对和本地数据。
+### 一次性准备：三个仓库 Secrets
 
-应用先读最新 Release 的 `latest.json`：`releases/latest/download/latest.json` 跳转到 CDN，不占 GitHub 匿名接口每个出口 IP 每小时 60 次的额度，多人共用出口的网络里也能查。读不到或读不懂再问 `releases/latest` 接口。`latest.json` 是接口返回 JSON 的子集，两者用同一套校验。
+| Secret | 内容 |
+|---|---|
+| `KEYSTORE_BASE64` | `base64 -w0 ~/.android/fromsko-release.jks` 的输出 |
+| `KEYSTORE_PASSWORD` | `storePassword` 与 `keyPassword`（本项目两者相同） |
+| `KEY_ALIAS` | `keyAlias`，默认 `fromsko` |
 
-应用在冷启动和每次回到前台时自动检查，只在最新 Release 比当前版本新、且附带可用 APK 时弹窗；更新窗口已经开着时不重复弹出。30 分钟内复用上次的检查结果；检查失败不提示，下次打开再试。用户也可以在「设置 → 当前版本」手动检查。
+三个都配好，CI 才会签名并发布；缺任何一个就只构建，产物留在 Actions 的 artifact 里。
 
-应用只接受本仓库、本 Release 标签下的 GitHub APK 地址，优先选择 arm64 附件。下载使用流式写入，检查大小及可用的 SHA-256；安装前再次校验本应用包名、同一签名、Release 版本名及更高构建号。没有合适 APK 时不提供下载按钮。
+### 每次发版
 
-首次安装更新可能跳到「允许安装未知应用」设置；授权后返回并点击「继续安装」。安装仍需要用户在 Android 系统界面确认，应用不会静默安装或绕过权限。关闭下载窗口会取消当前请求，不保证后台或进程被结束后的续传。
+1. 改 `pubspec.yaml` 的 `version`：版本名递增，`+` 后的构建号只增不减。
+2. 在 `CHANGELOG.md` 和 `CHANGELOG_CN.md` 顶部各写一节 `## <版本名>`——CI 和
+   `tool/release_manifest.dart` 都按这个标题找说明。
+3. 提交，打标签 `v<版本名>`，推标签。CI 出包并发布。
+4. 装一次验证：包名 `local.fromsko.mobile`、版本号、签名指纹是否与预期一致。
+
+### CI 做了什么
+
+- Flutter 3.47.9 + JDK 21 + Rust 1.97.1（带 Android 目标）+ Android SDK
+- `flutter pub get`、`flutter analyze --no-pub`
+- `flutter build apk --release --target-platform android-arm64`
+- 用 Secrets 里的密钥 zipalign + apksigner 签名，产物名 `fromsko-<版本>-<构建号>.apk`
+- 跑 `dart run tool/release_manifest.dart` 生成 `latest.json`
+- `gh release create` 发布，说明取 `latest.json` 的 `body`（英文在前，`<!-- zh -->`
+  之后是中文）
+
+### 本地出包（不经 CI）
+
+```sh
+tool/build_android.sh --no-install    # 产物在 build/app/outputs/flutter-apk/
+```
+
+### 自动更新当前是关闭的
+
+`lib/state/update_check.dart` 里 `fromskoUpdatesEnabled = false`。改名前它检查的是上游
+`shuishani/ycode` 的 Releases，那里的包名和签名都不同，装不上。等本仓库开始发版后，把这个
+常量改成 `true`，并把 `updateManifestUrl` / `updateReleaseApi` 指向
+`https://github.com/Fromsko/fcode`，自动更新就会重新工作。
 
 ## 注意事项
 

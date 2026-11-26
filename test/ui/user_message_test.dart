@@ -1,12 +1,12 @@
 import 'dart:async';
 
 import 'package:bao_link/bao_link.dart';
-import 'package:baocode_mobile/link/desktop_address.dart';
-import 'package:baocode_mobile/link/link_store.dart';
-import 'package:baocode_mobile/models/user_facing_error.dart';
-import 'package:baocode_mobile/platform/file_export.dart';
-import 'package:baocode_mobile/state/app_state.dart';
-import 'package:baocode_mobile/ui/user_message.dart';
+import 'package:fromsko_mobile/link/desktop_address.dart';
+import 'package:fromsko_mobile/link/link_store.dart';
+import 'package:fromsko_mobile/models/user_facing_error.dart';
+import 'package:fromsko_mobile/platform/file_export.dart';
+import 'package:fromsko_mobile/state/app_state.dart';
+import 'package:fromsko_mobile/ui/user_message.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 

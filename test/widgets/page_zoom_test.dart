@@ -1,6 +1,6 @@
-import 'package:baocode_mobile/theme/app_theme.dart';
-import 'package:baocode_mobile/ui/files/file_source_view.dart';
-import 'package:baocode_mobile/ui/files/files_tab.dart';
+import 'package:fromsko_mobile/theme/app_theme.dart';
+import 'package:fromsko_mobile/ui/files/file_source_view.dart';
+import 'package:fromsko_mobile/ui/files/files_tab.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 

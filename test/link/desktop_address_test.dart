@@ -1,9 +1,9 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:baocode_mobile/link/desktop_address.dart';
+import 'package:fromsko_mobile/link/desktop_address.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:baocode_mobile/models/user_facing_error.dart';
+import 'package:fromsko_mobile/models/user_facing_error.dart';
 
 void main() {
   test('域名、IPv4、IPv6 保留端口，格式无歧义', () {
